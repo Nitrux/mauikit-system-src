@@ -1,0 +1,5 @@
+module org.mauikit.system.power
+plugin MauiKitSystemPower
+classname PowerPlugin
+
+typeinfo plugins.qmltypes
