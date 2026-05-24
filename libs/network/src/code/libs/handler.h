@@ -4,15 +4,17 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 
-#ifndef PLASMA_NM_HANDLER_H
-#define PLASMA_NM_HANDLER_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_HANDLER_H
+#define MAUIKIT_SYSTEM_NETWORK_HANDLER_H
 
-#include "plasmanm_internal_export.h"
+#include "mauikitsystemnetwork_export.h"
 
-#include <QDBusInterface>
 #include <QDBusPendingCallWatcher>
+#include <QHash>
+#include <QMap>
 #include <QPointer>
 #include <QTimer>
+#include <memory>
 
 #include <qqmlregistration.h>
 
@@ -24,12 +26,18 @@
 
 #include <QCoroCore>
 
-class PLASMANM_INTERNAL_EXPORT Handler : public QObject
+class MAUIKITSYSTEMNETWORK_EXPORT Handler : public QObject
 {
     Q_OBJECT
     QML_ELEMENT
 
 public:
+    enum SecretStorageMode {
+        NmOwnedStorage = 0,
+        KeychainStorage = 1,
+    };
+    Q_ENUM(SecretStorageMode)
+
     explicit Handler(QObject *parent = nullptr);
     ~Handler() override;
 
@@ -123,9 +131,10 @@ public Q_SLOTS:
 
     void createHotspot();
     void stopHotspot();
+    Q_INVOKABLE int secretStorage(const QString &uuid) const;
+    Q_INVOKABLE bool setSecretStorage(const QString &uuid, int storageMode);
 
 private Q_SLOTS:
-    void secretAgentError(const QString &connectionPath, const QString &message);
     void primaryConnectionTypeChanged(NetworkManager::ConnectionSettings::ConnectionType type);
     void unlockRequiredChanged(MMModemLock modemLock);
     void slotRequestWifiCode(QDBusPendingCallWatcher *watcher);
@@ -139,6 +148,10 @@ Q_SIGNALS:
     void wifiCodeReceived(const QString &data, const QString &ssid);
 
 private:
+    SecretStorageMode storageModeForConnection(const QString &uuid) const;
+    NMVariantMapMap applySecretsStorageMode(const QString &uuid, const NMVariantMapMap &map) const;
+    void applySecretsStorageModeToConnection(const NetworkManager::Connection::Ptr &connection, SecretStorageMode storageMode);
+
     QCoro::Task<void> addAndActivateConnectionDBus(const NMVariantMapMap &map, const QString &device, const QString &specificObject);
     QCoro::Task<void> activateConnectionInternal(const QString &connection, const QString &device, const QString &specificParameter);
     QCoro::Task<void> addAndActivateConnectionInternal(const QString &device, const QString &specificParameter, const QString &password = QString());
@@ -167,6 +180,9 @@ private:
     void decrementScansCount();
 
     QPointer<QDBusPendingCallWatcher> m_requestWifiCodeWatcher;
+    std::unique_ptr<class SecretsBackend> m_nmOwnedSecretsBackend;
+    std::unique_ptr<class SecretsBackend> m_keychainSecretsBackend;
+    QHash<QString, SecretStorageMode> m_connectionStorageModes;
 };
 
-#endif // PLASMA_NM_HANDLER_H
+#endif // MAUIKIT_SYSTEM_NETWORK_HANDLER_H

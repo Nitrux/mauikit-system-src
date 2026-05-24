@@ -4,16 +4,16 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 
-#ifndef PLASMA_NM_EDITOR_PROXY_MODEL_H
-#define PLASMA_NM_EDITOR_PROXY_MODEL_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_EDITOR_PROXY_MODEL_H
+#define MAUIKIT_SYSTEM_NETWORK_EDITOR_PROXY_MODEL_H
 
-#include "plasmanm_internal_export.h"
+#include "mauikitsystemnetwork_export.h"
 
 #include <QSortFilterProxyModel>
 
 #include <qqmlregistration.h>
 
-class PLASMANM_INTERNAL_EXPORT EditorProxyModel : public QSortFilterProxyModel
+class MAUIKITSYSTEMNETWORK_EXPORT EditorProxyModel : public QSortFilterProxyModel
 {
     Q_OBJECT
     QML_ELEMENT
@@ -27,4 +27,4 @@ protected:
     bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
 };
 
-#endif // PLASMA_NM_EDITOR_PROXY_MODEL_H
+#endif // MAUIKIT_SYSTEM_NETWORK_EDITOR_PROXY_MODEL_H

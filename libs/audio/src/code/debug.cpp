@@ -6,4 +6,4 @@
 
 #include "debug.h"
 
-Q_LOGGING_CATEGORY(PLASMAPA, "org.mauikit.system.audio", QtWarningMsg)
+Q_LOGGING_CATEGORY(MAUIKIT_SYSTEM_AUDIO_LOG, "org.mauikit.system.audio", QtWarningMsg)

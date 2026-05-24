@@ -28,7 +28,7 @@ QVariant GSettingsItem::value(const QString &key) const
         toReturn = QVariant(QString::fromUtf8(g_variant_get_string(gvalue, nullptr)));
         break;
     default:
-        qCWarning(PLASMAPA()) << "Unhandled variant type in value()";
+        qCWarning(MAUIKIT_SYSTEM_AUDIO_LOG()) << "Unhandled variant type in value()";
     }
 
     g_variant_unref(gvalue);
@@ -58,7 +58,7 @@ void GSettingsItem::set(const QString &key, const QVariant &val)
         newValue = g_variant_new_string(val.toString().toUtf8().constData());
         break;
     default:
-        qCWarning(PLASMAPA()) << "Unhandled variant type in set()";
+        qCWarning(MAUIKIT_SYSTEM_AUDIO_LOG()) << "Unhandled variant type in set()";
     }
 
     if (newValue) {
@@ -81,13 +81,13 @@ GSettingsItem::GSettingsItem(const QString &key, QObject *parent)
     // g_settings_new_with_path asserts if the schema doesn't exist, check this manually to avoid an abort.
     auto *defaultSource = g_settings_schema_source_get_default();
     if (!defaultSource) {
-        qCWarning(PLASMAPA) << "No GSettings schemas are installed on the system";
+        qCWarning(MAUIKIT_SYSTEM_AUDIO_LOG) << "No GSettings schemas are installed on the system";
         return;
     }
 
     auto *schema = g_settings_schema_source_lookup(defaultSource, schemaId, true /*recursive*/);
     if (!schema) {
-        qCWarning(PLASMAPA) << "Settings schema" << schemaId << "is not installed";
+        qCWarning(MAUIKIT_SYSTEM_AUDIO_LOG) << "Settings schema" << schemaId << "is not installed";
         return;
     }
 

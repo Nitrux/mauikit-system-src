@@ -6,8 +6,10 @@
 
 #include "creatableconnectionsmodel.h"
 #include <KLocalizedString>
-#include <KPluginMetaData>
 #include <NetworkManagerQt/Manager>
+#include <libnm/nm-vpn-plugin-info.h>
+
+#include <QSet>
 
 CreatableConnectionItem::CreatableConnectionItem(const QString &typeName,
                                                  const QString &typeSection,
@@ -227,27 +229,37 @@ void CreatableConnectionsModel::populateModel()
                                                  true); // VpnType and SpecificType are empty
     m_list << connectionItem;
 
-    QList<KPluginMetaData> plugins = KPluginMetaData::findPlugins(QStringLiteral("plasma/network/vpn"));
+    GSList *networkManagerPlugins = nm_vpn_plugin_info_list_load();
+    QSet<QString> knownVpnServices;
+    for (GSList *it = networkManagerPlugins; it; it = it->next) {
+        auto *pluginInfo = static_cast<NMVpnPluginInfo *>(it->data);
+        if (!pluginInfo) {
+            continue;
+        }
 
-    std::sort(plugins.begin(), plugins.end(), [](const auto &left, const auto &right) {
-        return QString::localeAwareCompare(left.name(), right.name()) <= 0;
-    });
+        const QString vpnType = QString::fromUtf8(nm_vpn_plugin_info_get_service(pluginInfo));
+        if (vpnType.isEmpty() || knownVpnServices.contains(vpnType)) {
+            continue;
+        }
+        knownVpnServices.insert(vpnType);
 
-    for (const auto &service : std::as_const(plugins)) {
-        const QString vpnType = service.value(QStringLiteral("X-NetworkManager-Services"));
-        const QString vpnSubType = service.value(QStringLiteral("X-NetworkManager-Services-Subtype"));
-        const QString vpnDescription = service.description();
+        QString vpnName = QString::fromUtf8(nm_vpn_plugin_info_get_name(pluginInfo));
+        if (vpnName.isEmpty()) {
+            vpnName = vpnType;
+            vpnName.remove(QStringLiteral("org.freedesktop.NetworkManager."));
+        }
 
-        connectionItem = new CreatableConnectionItem(service.name(),
+        connectionItem = new CreatableConnectionItem(vpnName,
                                                      i18n("VPN connections"),
-                                                     vpnDescription,
+                                                     i18n("Create a %1 VPN connection", vpnName),
                                                      QStringLiteral("network-vpn"),
                                                      NetworkManager::ConnectionSettings::Vpn,
                                                      vpnType,
-                                                     vpnSubType,
+                                                     QString(),
                                                      false);
         m_list << connectionItem;
     }
+    g_slist_free(networkManagerPlugins);
 
     // WireGuard changed from VPN plugin to primary device in version 1.16 of NetworkManager
     if (NetworkManager::checkVersion(1, 16, 0)) {

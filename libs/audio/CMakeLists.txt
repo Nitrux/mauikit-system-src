@@ -42,7 +42,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/mauikitsystemaudio_version.h"
     DESTINATION ${KDE_INSTALL_INCLUDEDIR}/Maui/Core/Audio
     COMPONENT Devel)
 
-find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core Quick Qml DBus Gui Widgets REQUIRED)
+find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core Quick Qml DBus Gui REQUIRED)
 find_package(KF6 ${REQUIRED_KF_VERSION} REQUIRED COMPONENTS I18n Notifications)
 
 pkg_check_modules(LIBPIPEWIRE libpipewire-0.3 REQUIRED IMPORTED_TARGET)

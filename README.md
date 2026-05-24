@@ -7,8 +7,16 @@ _Shared desktop-integration libraries for the Maui stack._
 This repository currently provides the following modules:
 
 - `audio`: PipeWire/WirePlumber session integration and volume feedback
+- `network`: NetworkManager integration for connection management and status
 - `notifications`: Freedesktop notifications integration
 - `power`: power-management, battery, and brightness integration
+
+## Runtime notes
+
+- The `network` module uses NetworkManager/ModemManager directly and discovers VPN support from NetworkManager plugin metadata.
+- The `bluetooth` module talks to BlueZ D-Bus services directly for discovery/pairing and OBEX file transfer (`org.bluez.obex` / `obexd`).
+- `network` secret storage is backend-driven: NM-owned and keychain backends are both available; keychain is preferred when enabled (`MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN`) and available.
+- Keychain persistence uses QtKeychain (service `org.mauikit.system.network`, key format `<uuid>/<setting>/<secret-key>`). When both stores hold a value during transitions, keychain values are treated as authoritative.
 
 # Issues
 

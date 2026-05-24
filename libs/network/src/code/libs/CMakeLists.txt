@@ -1,13 +1,13 @@
-add_definitions(-DTRANSLATION_DOMAIN=\"plasmanetworkmanagement-libs\")
+add_definitions(-DTRANSLATION_DOMAIN=\"mauikitsystem-network\")
 
 
 
 
-add_library(plasmanm_internal SHARED)
-generate_export_header(plasmanm_internal)
+add_library(MauiKitSystemNetwork SHARED)
+generate_export_header(MauiKitSystemNetwork)
 
-ecm_qt_declare_logging_category(plasmanm_internal HEADER plasma_nm_libs.h IDENTIFIER PLASMA_NM_LIBS_LOG CATEGORY_NAME org.kde.plasma.nm.libs DESCRIPTION "Plasma NM (libs)" EXPORT PLASMANM)
-target_sources(plasmanm_internal PRIVATE
+ecm_qt_declare_logging_category(MauiKitSystemNetwork HEADER mauikitsystemnetwork_logging.h IDENTIFIER MAUIKIT_SYSTEM_NETWORK_LOG CATEGORY_NAME org.mauikit.system.network DESCRIPTION "MauiKitSystem Network" EXPORT MAUIKITSYSTEMNETWORK)
+target_sources(MauiKitSystemNetwork PRIVATE
     models/appletproxymodel.cpp
     models/creatableconnectionsmodel.cpp
     models/editorproxymodel.cpp
@@ -18,6 +18,7 @@ target_sources(plasmanm_internal PRIVATE
     models/networkmodelitem.cpp
     configurationproxy.cpp
     handler.cpp
+    secretsbackend.cpp
     models/appletproxymodel.h
     models/creatableconnectionsmodel.h
     models/editorproxymodel.h
@@ -28,6 +29,7 @@ target_sources(plasmanm_internal PRIVATE
     models/networkmodelitem.h
     configurationproxy.h
     handler.h
+    secretsbackend.h
     availabledevices.cpp
     connectionicon.cpp
     enabledconnections.cpp
@@ -40,32 +42,40 @@ target_sources(plasmanm_internal PRIVATE
     enums.h
     networkstatus.h
     wirelessstatus.h
+    editor/configuration.cpp
+    editor/configuration.h
+    editor/uiutils.cpp
+    editor/uiutils.h
 )
 
-target_include_directories(plasmanm_internal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/models)
+target_include_directories(MauiKitSystemNetwork
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/editor
+        ${CMAKE_CURRENT_SOURCE_DIR}/models
+        ${CMAKE_CURRENT_BINARY_DIR})
 
-target_link_libraries(plasmanm_internal
+target_link_libraries(MauiKitSystemNetwork
 PUBLIC
     KF6::NetworkManagerQt
-    plasmanm_editor
     PkgConfig::NETWORKMANAGER
     QCoro::Core
 PRIVATE
     Qt6::Qml
     KF6::I18n
     KF6::Notifications
-    KF6::Service
-    KF6::Wallet
-    KF6::WindowSystem
     KF6::KIOGui
+    KF6::CoreAddons
+    KF6::ConfigCore
     QCoro::DBus
 )
 
-target_link_libraries(plasmanm_internal PUBLIC KF6::ModemManagerQt)
+target_link_libraries(MauiKitSystemNetwork PUBLIC KF6::ModemManagerQt)
 
-ecm_add_qml_module(plasmanm_internal URI org.kde.plasma.networkmanagement GENERATE_PLUGIN_SOURCE)
-ecm_finalize_qml_module(plasmanm_internal)
+if(MAUIKIT_SYSTEM_NETWORK_QTKEYCHAIN_TARGET)
+    target_link_libraries(MauiKitSystemNetwork PRIVATE ${MAUIKIT_SYSTEM_NETWORK_QTKEYCHAIN_TARGET})
+endif()
 
-install(TARGETS plasmanm_internal ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+ecm_add_qml_module(MauiKitSystemNetwork URI org.mauikit.system.network GENERATE_PLUGIN_SOURCE)
+ecm_finalize_qml_module(MauiKitSystemNetwork)
 
-add_subdirectory(editor)
+install(TARGETS MauiKitSystemNetwork ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

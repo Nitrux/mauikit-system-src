@@ -68,7 +68,6 @@ target_link_libraries(${PROJECT_NAME}plugin
     Qt6::Core
     Qt6::Qml
     Qt6::Gui
-    Qt6::Widgets
     Qt6::DBus
     Qt6::Quick
 

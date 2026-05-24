@@ -68,5 +68,7 @@ ecm_setup_version(${PROJECT_VERSION}
 add_subdirectory(audio)
 add_subdirectory(notifications)
 add_subdirectory(power)
+add_subdirectory(network)
+add_subdirectory(bluetooth)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)

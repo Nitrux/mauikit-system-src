@@ -6,16 +6,16 @@
 
 */
 
-#ifndef PLASMA_NM_MOBILE_PROXY_MODEL_H
-#define PLASMA_NM_MOBILE_PROXY_MODEL_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_MOBILE_PROXY_MODEL_H
+#define MAUIKIT_SYSTEM_NETWORK_MOBILE_PROXY_MODEL_H
 
-#include "plasmanm_internal_export.h"
+#include "mauikitsystemnetwork_export.h"
 
 #include <QSortFilterProxyModel>
 
 #include <qqmlregistration.h>
 
-class PLASMANM_INTERNAL_EXPORT MobileProxyModel : public QSortFilterProxyModel
+class MAUIKITSYSTEMNETWORK_EXPORT MobileProxyModel : public QSortFilterProxyModel
 {
     Q_OBJECT
     QML_ELEMENT
@@ -37,4 +37,4 @@ private:
     bool m_showSavedMode = false;
 };
 
-#endif // PLASMA_NM_MOBILE_PROXY_MODEL_H
+#endif // MAUIKIT_SYSTEM_NETWORK_MOBILE_PROXY_MODEL_H

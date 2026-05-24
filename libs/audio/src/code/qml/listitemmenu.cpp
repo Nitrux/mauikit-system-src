@@ -291,13 +291,13 @@ static int getModelRole(QObject *model, const QByteArray &name)
     QVariant roleVariant;
     bool ok = QMetaObject::invokeMethod(model, "role", Q_RETURN_ARG(QVariant, roleVariant), Q_ARG(QVariant, QVariant(name)));
     if (!ok) {
-        qCCritical(PLASMAPA) << "Failed to invoke 'role' on" << model;
+        qCCritical(MAUIKIT_SYSTEM_AUDIO_LOG) << "Failed to invoke 'role' on" << model;
         return -1;
     }
 
     int role = roleVariant.toInt(&ok);
     if (!ok) {
-        qCCritical(PLASMAPA) << "Return value from 'role' is bogus" << roleVariant;
+        qCCritical(MAUIKIT_SYSTEM_AUDIO_LOG) << "Return value from 'role' is bogus" << roleVariant;
         return -1;
     }
 
@@ -311,7 +311,7 @@ QMenu *ListItemMenu::createMenu()
     }
 
     if (!m_visualParent || !m_visualParent->window()) {
-        qCWarning(PLASMAPA) << "Cannot prepare menu without visualParent or a window";
+        qCWarning(MAUIKIT_SYSTEM_AUDIO_LOG) << "Cannot prepare menu without visualParent or a window";
         return nullptr;
     }
 
@@ -461,7 +461,7 @@ QMenu *ListItemMenu::createMenu()
                     }
                 }
             } else {
-                qCWarning(PLASMAPA) << "Failed to find card at" << device->cardIndex() << "for" << device->description() << device->index();
+                qCWarning(MAUIKIT_SYSTEM_AUDIO_LOG) << "Failed to find card at" << device->cardIndex() << "for" << device->description() << device->index();
             }
         }
     }

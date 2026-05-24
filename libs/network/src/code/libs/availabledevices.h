@@ -4,8 +4,8 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 
-#ifndef PLASMA_NM_AVAILABLE_DEVICES_H
-#define PLASMA_NM_AVAILABLE_DEVICES_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_AVAILABLE_DEVICES_H
+#define MAUIKIT_SYSTEM_NETWORK_AVAILABLE_DEVICES_H
 
 #include <QObject>
 
@@ -62,4 +62,4 @@ private:
     bool m_bluetoothDeviceAvailable = false;
 };
 
-#endif // PLASMA_NM_AVAILABLE_DEVICES_H
+#endif // MAUIKIT_SYSTEM_NETWORK_AVAILABLE_DEVICES_H

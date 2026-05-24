@@ -10,6 +10,31 @@
 #include <KUser>
 #include <QMutexLocker>
 
+namespace
+{
+KSharedConfigPtr openPrimaryConfig()
+{
+    return KSharedConfig::openConfig(QStringLiteral("mauikit-system-network"));
+}
+
+KSharedConfigPtr openLegacyConfig()
+{
+    return KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+}
+
+template<typename T>
+T readGeneralEntryWithFallback(const QString &key, const T &defaultValue)
+{
+    KConfigGroup grp(openPrimaryConfig(), QStringLiteral("General"));
+    if (grp.hasKey(key)) {
+        return grp.readEntry(key, defaultValue);
+    }
+
+    KConfigGroup legacyGrp(openLegacyConfig(), QStringLiteral("General"));
+    return legacyGrp.readEntry(key, defaultValue);
+}
+}
+
 static bool propManageVirtualConnectionsInitialized = false;
 static bool propManageVirtualConnections = false;
 QMutex Configuration::sMutex;
@@ -22,19 +47,12 @@ Configuration &Configuration::self()
 
 bool Configuration::unlockModemOnDetection() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
-
-    if (grp.isValid()) {
-        return grp.readEntry(QStringLiteral("UnlockModemOnDetection"), true);
-    }
-
-    return true;
+    return readGeneralEntryWithFallback(QStringLiteral("UnlockModemOnDetection"), true);
 }
 
 void Configuration::setUnlockModemOnDetection(bool unlock)
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+    KSharedConfigPtr config = openPrimaryConfig();
     KConfigGroup grp(config, QStringLiteral("General"));
 
     if (grp.isValid()) {
@@ -49,23 +67,16 @@ bool Configuration::manageVirtualConnections() const
         return propManageVirtualConnections;
     }
 
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
+    QMutexLocker locker(&sMutex);
+    propManageVirtualConnections = readGeneralEntryWithFallback(QStringLiteral("ManageVirtualConnections"), false);
+    propManageVirtualConnectionsInitialized = true;
 
-    if (grp.isValid()) {
-        QMutexLocker locker(&sMutex);
-        propManageVirtualConnections = grp.readEntry(QStringLiteral("ManageVirtualConnections"), false);
-        propManageVirtualConnectionsInitialized = true;
-
-        return propManageVirtualConnections;
-    }
-
-    return true;
+    return propManageVirtualConnections;
 }
 
 void Configuration::setManageVirtualConnections(bool manage)
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+    KSharedConfigPtr config = openPrimaryConfig();
     KConfigGroup grp(config, QStringLiteral("General"));
 
     if (grp.isValid()) {
@@ -81,14 +92,12 @@ void Configuration::setManageVirtualConnections(bool manage)
 
 bool Configuration::airplaneModeEnabled() const
 {
-    static KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    static KConfigGroup grp(config, QStringLiteral("General"));
-    return grp.readEntry(QStringLiteral("AirplaneModeEnabled"), false);
+    return readGeneralEntryWithFallback(QStringLiteral("AirplaneModeEnabled"), false);
 }
 
 void Configuration::setAirplaneModeEnabled(bool enabled)
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+    KSharedConfigPtr config = openPrimaryConfig();
     KConfigGroup grp(config, QStringLiteral("General"));
 
     if (grp.isValid()) {
@@ -100,22 +109,14 @@ void Configuration::setAirplaneModeEnabled(bool enabled)
 
 QString Configuration::hotspotName() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
     KUser currentUser;
-
     const QString defaultName = currentUser.loginName() + QLatin1String("-hotspot");
-
-    if (grp.isValid()) {
-        return grp.readEntry(QStringLiteral("HotspotName"), defaultName);
-    }
-
-    return defaultName;
+    return readGeneralEntryWithFallback(QStringLiteral("HotspotName"), defaultName);
 }
 
 void Configuration::setHotspotName(const QString &name)
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+    KSharedConfigPtr config = openPrimaryConfig();
     KConfigGroup grp(config, QStringLiteral("General"));
 
     if (grp.isValid()) {
@@ -125,19 +126,12 @@ void Configuration::setHotspotName(const QString &name)
 
 QString Configuration::hotspotPassword() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
-
-    if (grp.isValid()) {
-        return grp.readEntry(QStringLiteral("HotspotPassword"), QString());
-    }
-
-    return {};
+    return readGeneralEntryWithFallback(QStringLiteral("HotspotPassword"), QString());
 }
 
 void Configuration::setHotspotPassword(const QString &password)
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+    KSharedConfigPtr config = openPrimaryConfig();
     KConfigGroup grp(config, QStringLiteral("General"));
 
     if (grp.isValid()) {
@@ -147,19 +141,12 @@ void Configuration::setHotspotPassword(const QString &password)
 
 QString Configuration::hotspotConnectionPath() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
-
-    if (grp.isValid()) {
-        return grp.readEntry(QStringLiteral("HotspotConnectionPath"), QString());
-    }
-
-    return {};
+    return readGeneralEntryWithFallback(QStringLiteral("HotspotConnectionPath"), QString());
 }
 
 void Configuration::setHotspotConnectionPath(const QString &path)
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
+    KSharedConfigPtr config = openPrimaryConfig();
     KConfigGroup grp(config, QStringLiteral("General"));
 
     if (grp.isValid()) {
@@ -169,21 +156,12 @@ void Configuration::setHotspotConnectionPath(const QString &path)
 
 bool Configuration::showPasswordDialog() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
-
-    if (grp.isValid()) {
-        return grp.readEntry(QStringLiteral("ShowPasswordDialog"), true);
-    }
-
-    return true;
+    return readGeneralEntryWithFallback(QStringLiteral("ShowPasswordDialog"), true);
 }
 
 bool Configuration::systemConnectionsByDefault() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("plasma-nm"));
-    KConfigGroup grp(config, QStringLiteral("General"));
-    return grp.readEntry(QStringLiteral("SystemConnectionsByDefault"), false);
+    return readGeneralEntryWithFallback(QStringLiteral("SystemConnectionsByDefault"), false);
 }
 
 #include "moc_configuration.cpp"

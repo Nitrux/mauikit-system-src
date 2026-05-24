@@ -4,8 +4,8 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 
-#ifndef PLASMA_NM_ENABLED_CONNECTIONS_H
-#define PLASMA_NM_ENABLED_CONNECTIONS_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_ENABLED_CONNECTIONS_H
+#define MAUIKIT_SYSTEM_NETWORK_ENABLED_CONNECTIONS_H
 
 #include <QObject>
 
@@ -71,4 +71,4 @@ private:
     bool m_wwanHwEnabled;
 };
 
-#endif // PLASMA_NM_ENABLED_CONNECTIONS_H
+#endif // MAUIKIT_SYSTEM_NETWORK_ENABLED_CONNECTIONS_H

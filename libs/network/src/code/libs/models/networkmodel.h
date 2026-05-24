@@ -4,10 +4,10 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 
-#ifndef PLASMA_NM_NETWORK_MODEL_H
-#define PLASMA_NM_NETWORK_MODEL_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_NETWORK_MODEL_H
+#define MAUIKIT_SYSTEM_NETWORK_NETWORK_MODEL_H
 
-#include "plasmanm_internal_export.h"
+#include "mauikitsystemnetwork_export.h"
 
 #include <QAbstractListModel>
 #include <QQueue>
@@ -23,7 +23,7 @@
 
 #include <ModemManagerQt/Modem>
 
-class PLASMANM_INTERNAL_EXPORT NetworkModel : public QAbstractListModel
+class MAUIKITSYSTEMNETWORK_EXPORT NetworkModel : public QAbstractListModel
 {
     Q_OBJECT
     QML_ELEMENT
@@ -141,4 +141,4 @@ private:
     NetworkManager::WirelessSecurityType alternativeWirelessSecurity(const NetworkManager::WirelessSecurityType type);
 };
 
-#endif // PLASMA_NM_NETWORK_MODEL_H
+#endif // MAUIKIT_SYSTEM_NETWORK_NETWORK_MODEL_H

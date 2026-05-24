@@ -6,8 +6,8 @@
 
 #include "handler.h"
 #include "configuration.h"
-#include "connectioneditordialog.h"
-#include "plasma_nm_libs.h"
+#include "mauikitsystemnetwork_logging.h"
+#include "secretsbackend.h"
 #include "uiutils.h"
 
 #include <NetworkManagerQt/AccessPoint>
@@ -27,6 +27,7 @@
 #include <ModemManagerQt/ModemDevice>
 
 #include <QDBusError>
+#include <QDBusConnectionInterface>
 #include <QDBusMetaType>
 #include <QDBusPendingReply>
 #include <QDBusReply>
@@ -37,36 +38,40 @@
 #include <KIO/OpenUrlJob>
 #include <KLocalizedString>
 #include <KNotification>
-#include <KOSRelease>
-#include <KPluginMetaData>
 #include <KProcess>
 #include <KUser>
-#include <KWallet>
-#include <KWindowSystem>
-#include <KX11Extras>
 
 #include <QCoroCore>
 #include <QCoroDBus>
 #include <nm-client.h>
 
-#define AGENT_SERVICE "org.kde.kded6"
-#define AGENT_PATH "/modules/networkmanagement"
-#define AGENT_IFACE "org.kde.plasmanetworkmanagement"
-
 // 10 seconds
 #define NM_REQUESTSCAN_LIMIT_RATE 10000
+
+namespace
+{
+Handler::SecretStorageMode modeFromInt(int rawMode)
+{
+    if (rawMode == Handler::KeychainStorage) {
+        return Handler::KeychainStorage;
+    }
+    return Handler::NmOwnedStorage;
+}
+}
 
 Handler::Handler(QObject *parent)
     : QObject(parent)
     , m_tmpWirelessEnabled(NetworkManager::isWirelessEnabled())
     , m_tmpWwanEnabled(NetworkManager::isWwanEnabled())
 {
-    QDBusConnection::sessionBus().connect(QStringLiteral(AGENT_SERVICE),
-                                          QStringLiteral(AGENT_PATH),
-                                          QStringLiteral(AGENT_IFACE),
-                                          QStringLiteral("secretsError"),
-                                          this,
-                                          SLOT(secretAgentError(QString, QString)));
+    bool secretServiceAvailable = false;
+    if (QDBusConnectionInterface *busInterface = QDBusConnection::sessionBus().interface()) {
+        const QDBusReply<bool> reply = busInterface->isServiceRegistered(QStringLiteral("org.freedesktop.secrets"));
+        secretServiceAvailable = reply.isValid() && reply.value();
+    }
+
+    m_nmOwnedSecretsBackend = std::make_unique<NmOwnedBackend>();
+    m_keychainSecretsBackend = std::make_unique<KeychainBackend>(secretServiceAvailable);
 
     if (!Configuration::self().hotspotConnectionPath().isEmpty()) {
         NetworkManager::ActiveConnection::Ptr hotspot = NetworkManager::findActiveConnection(Configuration::self().hotspotConnectionPath());
@@ -94,44 +99,15 @@ QCoro::Task<void> Handler::activateConnectionInternal(const QString &connection,
     NetworkManager::Connection::Ptr con = NetworkManager::findConnection(connection);
 
     if (!con) {
-        qCWarning(PLASMA_NM_LIBS_LOG) << "Not possible to activate this connection";
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Not possible to activate this connection";
         co_return;
     }
 
     if (con->settings()->connectionType() == NetworkManager::ConnectionSettings::Vpn) {
         NetworkManager::VpnSetting::Ptr vpnSetting = con->settings()->setting(NetworkManager::Setting::Vpn).staticCast<NetworkManager::VpnSetting>();
         if (vpnSetting) {
-            qCDebug(PLASMA_NM_LIBS_LOG) << "Checking VPN" << con->name() << "type:" << vpnSetting->serviceType();
-
-            // Check missing plasma-nm VPN plugin
-
-            const auto filter = [vpnSetting](const KPluginMetaData &md) -> bool {
-                return md.value(QStringLiteral("X-NetworkManager-Services")) == vpnSetting->serviceType();
-            };
-
-            const QList<KPluginMetaData> plasmaNmPlugins = KPluginMetaData::findPlugins(QStringLiteral("plasma/network/vpn"), filter);
-
+            qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Checking VPN" << con->name() << "type:" << vpnSetting->serviceType();
             const QString pluginBaseName = vpnSetting->serviceType().remove(QLatin1String("org.freedesktop.NetworkManager."));
-
-            if (plasmaNmPlugins.empty()) {
-                qCWarning(PLASMA_NM_LIBS_LOG) << "VPN" << vpnSetting->serviceType() << "not found, skipping";
-                auto notification = new KNotification(QStringLiteral("MissingVpnPlugin"), KNotification::Persistent, this);
-                notification->setComponentName(QStringLiteral("networkmanagement"));
-                notification->setTitle(con->name());
-                notification->setText(i18n("Plasma is missing support for '%1' VPN connections.", pluginBaseName));
-                notification->setIconName(QStringLiteral("dialog-error"));
-
-                auto reportBugAction = notification->addAction(i18n("Report Bug"));
-                connect(reportBugAction, &KNotificationAction::activated, this, [notification] {
-                    auto *job = new KIO::OpenUrlJob(QUrl(KOSRelease().bugReportUrl()));
-                    job->setStartupId(notification->xdgActivationToken().toUtf8());
-                    job->start();
-                });
-
-                notification->sendEvent();
-
-                co_return;
-            }
 
             // Check missing NetworkManager VPN plugin
             GSList *networkManagerPlugins = nullptr;
@@ -140,7 +116,7 @@ QCoro::Task<void> Handler::activateConnectionInternal(const QString &connection,
             NMVpnPluginInfo *plugin_info = nm_vpn_plugin_info_list_find_by_service(networkManagerPlugins, vpnSetting->serviceType().toStdString().c_str());
 
             if (!plugin_info) {
-                qCWarning(PLASMA_NM_LIBS_LOG) << "VPN" << vpnSetting->serviceType() << "not found, skipping";
+                qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "VPN" << vpnSetting->serviceType() << "not found, skipping";
                 auto notification = new KNotification(QStringLiteral("MissingVpnPlugin"), KNotification::Persistent, this);
                 notification->setComponentName(QStringLiteral("networkmanagement"));
                 notification->setTitle(con->name());
@@ -168,13 +144,14 @@ QCoro::Task<void> Handler::activateConnectionInternal(const QString &connection,
                 ModemManager::Modem::Ptr modem = mmModemDevice->interface(ModemManager::ModemDevice::ModemInterface).objectCast<ModemManager::Modem>();
                 NetworkManager::GsmSetting::Ptr gsmSetting = con->settings()->setting(NetworkManager::Setting::Gsm).staticCast<NetworkManager::GsmSetting>();
                 if (gsmSetting && gsmSetting->pinFlags() == NetworkManager::Setting::NotSaved && modem && modem->unlockRequired() > MM_MODEM_LOCK_NONE) {
-                    QDBusInterface managerIface(QStringLiteral("org.kde.plasmanetworkmanagement"),
-                                                QStringLiteral("/org/kde/plasmanetworkmanagement"),
-                                                QStringLiteral("org.kde.plasmanetworkmanagement"),
-                                                QDBusConnection::sessionBus(),
-                                                this);
-                    managerIface.call(QStringLiteral("unlockModem"), mmModemDevice->uni());
-                    connect(modem.data(), &ModemManager::Modem::unlockRequiredChanged, this, &Handler::unlockRequiredChanged);
+                    const QString error = i18n("SIM PIN is required before this connection can be activated.");
+                    auto notification = new KNotification(QStringLiteral("SimPinRequired"), KNotification::CloseOnTimeout, this);
+                    notification->setComponentName(QStringLiteral("networkmanagement"));
+                    notification->setTitle(i18n("SIM unlock required"));
+                    notification->setText(error);
+                    notification->setIconName(QStringLiteral("dialog-warning"));
+                    notification->sendEvent();
+                    Q_EMIT connectionActivationFailed(connection, error);
                     m_tmpConnectionPath = connection;
                     m_tmpDevicePath = device;
                     m_tmpSpecificPath = specificObject;
@@ -318,20 +295,9 @@ QCoro::Task<void> Handler::addAndActivateConnectionInternal(const QString &devic
         m_tmpConnectionUuid = settings->uuid();
         m_tmpDevicePath = device;
         m_tmpSpecificPath = specificObject;
-
-        QPointer<ConnectionEditorDialog> editor = new ConnectionEditorDialog(settings);
-        editor->setAttribute(Qt::WA_DeleteOnClose);
-        editor->show();
-
-        if (KWindowSystem::isPlatformX11()) {
-            KX11Extras::setState(editor->winId(), NET::KeepAbove);
-        }
-
-        connect(editor.data(), &ConnectionEditorDialog::accepted, [editor, device, specificObject, this]() { //
-            addAndActivateConnectionDBus(editor->setting(), device, specificObject);
-        });
-        editor->setModal(true);
-        editor->show();
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "WPA-Enterprise / 802.1x networks require an external connection editor, which is not bundled. Skipping" << settings->id();
+        settings.clear();
+        co_return;
     } else {
         if (securityType == NetworkManager::StaticWep) {
             wifiSecurity->setKeyMgmt(NetworkManager::WirelessSecuritySetting::Wep);
@@ -355,8 +321,10 @@ QCoro::Task<void> Handler::addAndActivateConnectionInternal(const QString &devic
 QCoro::Task<void> Handler::addConnection(const NMVariantMapMap &map)
 {
     const QString connectionId = map.value(QStringLiteral("connection")).value(QStringLiteral("id")).toString();
+    const QString connectionUuid = map.value(QStringLiteral("connection")).value(QStringLiteral("uuid")).toString();
+    const NMVariantMapMap effectiveMap = applySecretsStorageMode(connectionUuid, map);
 
-    QDBusReply<QDBusObjectPath> reply = co_await NetworkManager::addConnection(map);
+    QDBusReply<QDBusObjectPath> reply = co_await NetworkManager::addConnection(effectiveMap);
 
     if (!reply.isValid()) {
         KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
@@ -429,7 +397,9 @@ void Handler::addConnection(NMConnection *connection)
 QCoro::Task<void> Handler::addAndActivateConnectionDBus(const NMVariantMapMap &map, const QString &device, const QString &specificObject)
 {
     const QString name = map.value(QStringLiteral("connection")).value(QStringLiteral("id")).toString();
-    QDBusReply<QDBusObjectPath> reply = co_await NetworkManager::addAndActivateConnection(map, device, specificObject);
+    const QString uuid = map.value(QStringLiteral("connection")).value(QStringLiteral("uuid")).toString();
+    const NMVariantMapMap effectiveMap = applySecretsStorageMode(uuid, map);
+    QDBusReply<QDBusObjectPath> reply = co_await NetworkManager::addAndActivateConnection(effectiveMap, device, specificObject);
 
     if (!reply.isValid()) {
         KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
@@ -452,7 +422,7 @@ QCoro::Task<void> Handler::deactivateConnectionInternal(const QString &_connecti
     NetworkManager::Connection::Ptr con = NetworkManager::findConnection(connection);
 
     if (!con) {
-        qCWarning(PLASMA_NM_LIBS_LOG) << "Not possible to deactivate this connection";
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Not possible to deactivate this connection";
         co_return;
     }
 
@@ -527,15 +497,15 @@ QCoro::Task<void> Handler::enableBluetooth(bool enable)
     QDBusReply<QMap<QDBusObjectPath, NMVariantMapMap>> reply = co_await QDBusConnection::systemBus().asyncCall(getObjects);
 
     if (!reply.isValid()) {
-        qCWarning(PLASMA_NM_LIBS_LOG) << reply.error().message();
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << reply.error().message();
         co_return;
     }
 
     for (const QDBusObjectPath &path : reply.value().keys()) {
         const QString objPath = path.path();
-        qCDebug(PLASMA_NM_LIBS_LOG) << "inspecting path" << objPath;
+        qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "inspecting path" << objPath;
         const QStringList interfaces = reply.value().value(path).keys();
-        qCDebug(PLASMA_NM_LIBS_LOG) << "interfaces:" << interfaces;
+        qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "interfaces:" << interfaces;
 
         if (!interfaces.contains(QStringLiteral("org.bluez.Adapter1"))) {
             continue;
@@ -550,7 +520,7 @@ QCoro::Task<void> Handler::enableBluetooth(bool enable)
             QDBusReply<QVariant> reply = co_await QDBusConnection::systemBus().asyncCall(getPowered);
 
             if (!reply.isValid()) {
-                qCWarning(PLASMA_NM_LIBS_LOG) << reply.error().message();
+                qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << reply.error().message();
                 co_return;
             }
 
@@ -587,7 +557,7 @@ QCoro::Task<void> Handler::removeConnectionInternal(const QString &connection)
     NetworkManager::Connection::Ptr con = NetworkManager::findConnection(connection);
 
     if (!con || con->uuid().isEmpty()) {
-        qCWarning(PLASMA_NM_LIBS_LOG) << "Not possible to remove connection " << connection;
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Not possible to remove connection " << connection;
         co_return;
     }
 
@@ -620,7 +590,8 @@ QCoro::Task<void> Handler::removeConnectionInternal(const QString &connection)
 
 QCoro::Task<void> Handler::updateConnection(NetworkManager::Connection::Ptr connection, const NMVariantMapMap &map)
 {
-    QDBusReply<void> reply = co_await connection->update(map);
+    const NMVariantMapMap effectiveMap = applySecretsStorageMode(connection ? connection->uuid() : QString(), map);
+    QDBusReply<void> reply = co_await connection->update(effectiveMap);
 
     if (!reply.isValid()) {
         KNotification *notification = new KNotification(QStringLiteral("FailedToUpdateConnection"), KNotification::CloseOnTimeout, this);
@@ -667,7 +638,7 @@ QCoro::Task<void> Handler::requestScanInternal(const QString &interface)
                     } else if (lastRequestScan.isValid() && lastRequestScan.msecsTo(now) < NM_REQUESTSCAN_LIMIT_RATE) {
                         timeout = NM_REQUESTSCAN_LIMIT_RATE - lastRequestScan.msecsTo(now);
                     }
-                    qCDebug(PLASMA_NM_LIBS_LOG) << "Rescheduling a request scan for" << wifiDevice->interfaceName() << "in" << timeout;
+                    qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Rescheduling a request scan for" << wifiDevice->interfaceName() << "in" << timeout;
                     scheduleRequestScan(wifiDevice->interfaceName(), timeout);
 
                     if (!interface.isEmpty()) {
@@ -679,17 +650,17 @@ QCoro::Task<void> Handler::requestScanInternal(const QString &interface)
                     delete m_wirelessScanRetryTimer.take(interface);
                 }
 
-                qCDebug(PLASMA_NM_LIBS_LOG) << "Requesting wifi scan on device" << wifiDevice->interfaceName();
+                qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Requesting wifi scan on device" << wifiDevice->interfaceName();
 
                 incrementScansCount();
                 QDBusReply<void> reply = co_await wifiDevice->requestScan();
 
                 if (!reply.isValid()) {
                     const QString interface = wifiDevice->interfaceName();
-                    qCWarning(PLASMA_NM_LIBS_LOG) << "Wireless scan on" << interface << "failed:" << reply.error().message();
+                    qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Wireless scan on" << interface << "failed:" << reply.error().message();
                     scanRequestFailed(interface);
                 } else {
-                    qCDebug(PLASMA_NM_LIBS_LOG) << "Wireless scan on" << wifiDevice->interfaceName() << "succeeded";
+                    qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Wireless scan on" << wifiDevice->interfaceName() << "succeeded";
                 }
                 decrementScansCount();
             }
@@ -708,7 +679,7 @@ void Handler::incrementScansCount()
 void Handler::decrementScansCount()
 {
     if (m_ongoingScansCount == 0) {
-        qCDebug(PLASMA_NM_LIBS_LOG) << "Extra decrementScansCount() called";
+        qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Extra decrementScansCount() called";
         return;
     }
     m_ongoingScansCount -= 1;
@@ -762,7 +733,7 @@ QCoro::Task<void> Handler::createHotspotInternal()
     }
 
     if (!wifiDev) {
-        qCWarning(PLASMA_NM_LIBS_LOG) << "Failed to create hotspot: missing wireless device";
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Failed to create hotspot: missing wireless device";
         co_return;
     }
 
@@ -856,6 +827,91 @@ void Handler::stopHotspot()
     Q_EMIT hotspotDisabled();
 }
 
+int Handler::secretStorage(const QString &uuid) const
+{
+    return storageModeForConnection(uuid);
+}
+
+bool Handler::setSecretStorage(const QString &uuid, int storageMode)
+{
+    if (uuid.isEmpty()) {
+        return false;
+    }
+
+    const SecretStorageMode mode = modeFromInt(storageMode);
+    if (mode == KeychainStorage && (!m_keychainSecretsBackend || !m_keychainSecretsBackend->available())) {
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Keychain backend requested but unavailable, keeping NM-owned storage for" << uuid;
+        m_connectionStorageModes.insert(uuid, NmOwnedStorage);
+    } else {
+        m_connectionStorageModes.insert(uuid, mode);
+    }
+
+    for (const NetworkManager::Connection::Ptr &connection : NetworkManager::listConnections()) {
+        if (connection && connection->uuid() == uuid) {
+            applySecretsStorageModeToConnection(connection, storageModeForConnection(uuid));
+            return true;
+        }
+    }
+
+    return true;
+}
+
+Handler::SecretStorageMode Handler::storageModeForConnection(const QString &uuid) const
+{
+    if (!uuid.isEmpty() && m_connectionStorageModes.contains(uuid)) {
+        return m_connectionStorageModes.value(uuid);
+    }
+
+#if MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN
+    if (m_keychainSecretsBackend && m_keychainSecretsBackend->available()) {
+        return KeychainStorage;
+    }
+#endif
+
+    return NmOwnedStorage;
+}
+
+NMVariantMapMap Handler::applySecretsStorageMode(const QString &uuid, const NMVariantMapMap &map) const
+{
+    NMVariantMapMap effectiveMap = map;
+    const SecretStorageMode mode = storageModeForConnection(uuid);
+
+    const SecretsBackend *backend = nullptr;
+    if (mode == KeychainStorage && m_keychainSecretsBackend && m_keychainSecretsBackend->available()) {
+        backend = m_keychainSecretsBackend.get();
+    } else {
+        backend = m_nmOwnedSecretsBackend.get();
+    }
+
+    if (backend) {
+        backend->applySecretFlags(effectiveMap);
+    }
+    return effectiveMap;
+}
+
+void Handler::applySecretsStorageModeToConnection(const NetworkManager::Connection::Ptr &connection, SecretStorageMode storageMode)
+{
+    if (!connection) {
+        return;
+    }
+
+    const QString uuid = connection->uuid();
+    if (uuid.isEmpty()) {
+        return;
+    }
+
+    m_connectionStorageModes.insert(uuid, storageMode);
+    const NMVariantMapMap effectiveMap = applySecretsStorageMode(uuid, connection->settings()->toMap());
+    auto *watcher = new QDBusPendingCallWatcher(connection->update(effectiveMap), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, uuid](QDBusPendingCallWatcher *call) {
+        QDBusPendingReply<void> reply = *call;
+        call->deleteLater();
+        if (!reply.isValid()) {
+            qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Failed to apply secret storage mode for connection" << uuid << ":" << reply.error().message();
+        }
+    });
+}
+
 bool Handler::checkRequestScanRateLimit(const NetworkManager::WirelessDevice::Ptr &wifiDevice)
 {
     QDateTime now = QDateTime::currentDateTime();
@@ -868,7 +924,7 @@ bool Handler::checkRequestScanRateLimit(const NetworkManager::WirelessDevice::Pt
     ret |= lastRequestScan.isValid() && lastRequestScan.msecsTo(now) < NM_REQUESTSCAN_LIMIT_RATE;
     // skip the request scan
     if (ret) {
-        qCDebug(PLASMA_NM_LIBS_LOG) << "Last scan finished" << lastScan.msecsTo(now) << "ms ago and last request scan was sent" //
+        qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Last scan finished" << lastScan.msecsTo(now) << "ms ago and last request scan was sent" //
                                     << lastRequestScan.msecsTo(now) << "ms ago, Skipping scanning interface:" << wifiDevice->interfaceName();
         return false;
     }
@@ -938,13 +994,6 @@ void Handler::scheduleRequestScan(const QString &interface, int timeout)
 void Handler::scanRequestFailed(const QString &interface)
 {
     scheduleRequestScan(interface, 2000);
-}
-
-void Handler::secretAgentError(const QString &connectionPath, const QString &message)
-{
-    // If the password was wrong, forget it
-    removeConnection(connectionPath);
-    Q_EMIT connectionActivationFailed(connectionPath, message);
 }
 
 void Handler::primaryConnectionTypeChanged(NetworkManager::ConnectionSettings::ConnectionType type)

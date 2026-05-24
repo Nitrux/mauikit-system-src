@@ -9,14 +9,13 @@
 #include "uiutils.h"
 
 #include "configuration.h"
-#include "plasma_nm_editor.h"
+#include "mauikitsystemnetwork_logging.h"
 
 // KDE
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <KUser>
-#include <KWallet>
 
 #include <NetworkManagerQt/Manager>
 #include <NetworkManagerQt/Security8021xSetting>
@@ -166,7 +165,7 @@ QString UiUtils::interfaceTypeLabel(const NetworkManager::Device::Type type, con
                 deviceText = i18nc("title of the interface widget in nm's popup", "Mobile Broadband");
                 break;
             case NetworkManager::ModemDevice::NoCapability:
-                qCWarning(PLASMA_NM_EDITOR_LOG) << "Unhandled modem sub type: NetworkManager::ModemDevice::NoCapability";
+                qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Unhandled modem sub type: NetworkManager::ModemDevice::NoCapability";
                 break;
             }
         }
@@ -693,9 +692,7 @@ bool UiUtils::isLiveImage()
     }
 
     QFile cmdFile(QStringLiteral("/proc/cmdline"));
-    cmdFile.open(QIODevice::ReadOnly);
-
-    if (!cmdFile.isOpen()) {
+    if (!cmdFile.open(QIODevice::ReadOnly)) {
         return false;
     }
 
@@ -720,7 +717,7 @@ void UiUtils::setConnectionDefaultPermissions(NetworkManager::ConnectionSettings
         return;
     }
 
-    if (Configuration::self().systemConnectionsByDefault() || !KWallet::Wallet::isEnabled() || isLiveImage()) {
+    if (Configuration::self().systemConnectionsByDefault() || isLiveImage()) {
         auto modifySystem = NetworkManager::permissions().value(QStringLiteral("org.freedesktop.NetworkManager.settings.modify.system"));
         if (modifySystem == QLatin1String("yes")) {
             wifiSecurity->setLeapPasswordFlags(NetworkManager::Setting::SecretFlagType::None);

@@ -6,58 +6,44 @@ cmake_minimum_required(VERSION 3.16)
 
 include(FindPkgConfig)
 include(ECMDeprecationSettings)
+include(ECMQtDeclareLoggingCategory)
 
-set(AUTOMOC_MOC_OPTIONS -Muri=org.mauikit.system.audio)
-
-project(MauiKitSystemAudio LANGUAGES CXX VERSION ${MAUIKITSYSTEM_VERSION})
+project(MauiKitSystemNetwork LANGUAGES CXX VERSION ${MAUIKITSYSTEM_VERSION})
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH})
 
-set(CMAKECONFIG_INSTALL_DIR "${KDE_INSTALL_CMAKEPACKAGEDIR}/MauiKitSystemAudio")
+option(MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN "Prefer keychain-backed secret storage when a Secret Service is available" ON)
 
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/MauiKitSystemAudioConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/MauiKitSystemAudioConfig.cmake"
-    INSTALL_DESTINATION ${CMAKECONFIG_INSTALL_DIR}
-    PATH_VARS CMAKE_INSTALL_PREFIX)
+find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core Qml Quick DBus Gui REQUIRED)
+find_package(Qt6Keychain QUIET)
 
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/MauiKitSystemAudioConfigVersion.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/MauiKitSystemAudioConfig.cmake"
-    DESTINATION "${CMAKECONFIG_INSTALL_DIR}"
-    COMPONENT Devel)
+find_package(KF6 ${REQUIRED_KF_VERSION} REQUIRED COMPONENTS
+    I18n
+    Notifications
+    KIO
+    NetworkManagerQt
+    ModemManagerQt
+    CoreAddons
+    Config)
 
-install(EXPORT MauiKitSystemAudioTargets
-    DESTINATION "${CMAKECONFIG_INSTALL_DIR}"
-    FILE MauiKitSystemAudioTargets.cmake
-    NAMESPACE MauiKitSystem::)
+find_package(QCoro6 REQUIRED COMPONENTS Core DBus)
 
-ecm_setup_version(${PROJECT_VERSION}
-    VARIABLE_PREFIX MauiKitSystemAudio
-    VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/mauicoreaudio_version.h"
-    PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/MauiKitSystemAudioConfigVersion.cmake"
-    SOVERSION ${PROJECT_VERSION_MAJOR})
+pkg_check_modules(NETWORKMANAGER libnm REQUIRED IMPORTED_TARGET)
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/mauicoreaudio_version.h"
-    DESTINATION ${KDE_INSTALL_INCLUDEDIR}/Maui/Core/Audio
-    COMPONENT Devel)
+ecm_set_disabled_deprecation_versions(QT 5.15.2 KF 5.101)
 
-find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core Quick DBus Gui Widgets REQUIRED)
-find_package(KF6 ${REQUIRED_KF_VERSION} REQUIRED COMPONENTS I18n)
+if(MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN)
+    add_compile_definitions(MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN=1)
+else()
+    add_compile_definitions(MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN=0)
+endif()
 
-pkg_check_modules(GIO gio-2.0 REQUIRED IMPORTED_TARGET)
-
-find_package(SoundThemeFreedesktop)
-set_package_properties(SoundThemeFreedesktop PROPERTIES
-    DESCRIPTION "The standard freedesktop sound theme"
-    PURPOSE "Required for volume feedback sounds"
-    URL "https://www.freedesktop.org/wiki/Specifications/sound-theme-spec/"
-    TYPE RUNTIME)
-
-ecm_set_disabled_deprecation_versions(QT 5.15.2
-    KF 5.101
-)
+if(TARGET Qt6Keychain::Qt6Keychain)
+    set(MAUIKIT_SYSTEM_NETWORK_QTKEYCHAIN_TARGET Qt6Keychain::Qt6Keychain)
+    add_compile_definitions(MAUIKIT_SYSTEM_NETWORK_HAS_QTKEYCHAIN=1)
+else()
+    set(MAUIKIT_SYSTEM_NETWORK_QTKEYCHAIN_TARGET "")
+    add_compile_definitions(MAUIKIT_SYSTEM_NETWORK_HAS_QTKEYCHAIN=0)
+endif()
 
 add_subdirectory(src)
-
-feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)

@@ -7,7 +7,7 @@
 #ifndef CONFIGURATIONPROXY_H
 #define CONFIGURATIONPROXY_H
 
-#include "plasmanm_internal_export.h"
+#include "mauikitsystemnetwork_export.h"
 
 #include "configuration.h"
 #include <QObject>
@@ -15,7 +15,7 @@
 
 #include <qqmlregistration.h>
 
-class PLASMANM_INTERNAL_EXPORT ConfigurationProxy : public QObject
+class MAUIKITSYSTEMNETWORK_EXPORT ConfigurationProxy : public QObject
 {
     Q_OBJECT
     QML_ELEMENT

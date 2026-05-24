@@ -5,10 +5,10 @@
     SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 */
 
-#ifndef PLASMA_NM_UIUTILS_H
-#define PLASMA_NM_UIUTILS_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_UIUTILS_H
+#define MAUIKIT_SYSTEM_NETWORK_UIUTILS_H
 
-#include "plasmanm_editor_export.h"
+#include "mauikitsystemnetwork_export.h"
 
 #include <NetworkManagerQt/AccessPoint>
 #include <NetworkManagerQt/BluetoothDevice>
@@ -24,7 +24,7 @@
 #include <ModemManager/ModemManager.h>
 #include <ModemManagerQt/Modem>
 
-class PLASMANM_EDITOR_EXPORT UiUtils
+class MAUIKITSYSTEMNETWORK_EXPORT UiUtils
 {
 public:
     enum SortedConnectionType {
@@ -127,9 +127,10 @@ public:
      * This determines whether we should use system connections or user
      * connections by default and sets the default permissions accordingly.
      * System connections are preferred if either the preference for that is
-     * set, KWallet is not enabled or we're running in a live image. However, if
-     * we do not have permissions to create system connections, we fall back to
-     * user connections.
+     * set or we're running in a live image. However, if we do not have
+     * permissions to create system connections, we fall back to user
+     * connections (secrets are then stored by NetworkManager's secret agent
+     * via the freedesktop SecretService API).
      *
      * @param settings The connection settings to setup.
      * @param liveSession Whether we are running a session from a live disk image.
@@ -145,4 +146,4 @@ public:
     static QString formatDateRelative(const QDateTime &lastUsed);
     static QString formatLastUsedDateRelative(const QDateTime &lastUsed);
 };
-#endif // UIUTILS_H
+#endif // MAUIKIT_SYSTEM_NETWORK_UIUTILS_H

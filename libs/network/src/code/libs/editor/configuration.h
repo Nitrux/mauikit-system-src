@@ -4,16 +4,16 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 
-#ifndef PLASMA_NM_CONFIGURATION_H
-#define PLASMA_NM_CONFIGURATION_H
+#ifndef MAUIKIT_SYSTEM_NETWORK_CONFIGURATION_H
+#define MAUIKIT_SYSTEM_NETWORK_CONFIGURATION_H
 
-#include "plasmanm_editor_export.h"
+#include "mauikitsystemnetwork_export.h"
 
 #include <NetworkManagerQt/Manager>
 #include <QMutex>
 #include <QObject>
 
-class PLASMANM_EDITOR_EXPORT Configuration : public QObject
+class MAUIKITSYSTEMNETWORK_EXPORT Configuration : public QObject
 {
     Q_OBJECT
 public:
@@ -50,4 +50,4 @@ private:
     static QMutex sMutex;
 };
 
-#endif // PLAMA_NM_CONFIGURATION_H
+#endif // MAUIKIT_SYSTEM_NETWORK_CONFIGURATION_H

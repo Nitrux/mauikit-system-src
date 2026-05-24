@@ -174,7 +174,7 @@ static void applyCommonNodeSnapshot(VolumeObject *obj, const NodeSnapshot &snap)
     obj->setRawChannels(obj->channels());
     QVector<qint64> channelVolumes;
     channelVolumes << snap.volume << snap.volume;
-    obj->setChannelVolumes(channelVolumes);
+    obj->VolumeObject::setChannelVolumes(channelVolumes);
 }
 
 SinkModel::SinkModel(QObject *parent)
