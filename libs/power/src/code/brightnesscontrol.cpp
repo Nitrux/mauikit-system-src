@@ -195,7 +195,7 @@ void BrightnessControl::setMaximumKeyboardBrightness(int value)
     }
 
     m_maximumKeyboardBrightness = value;
-    Q_EMIT maximumScreenBrightnessChanged(m_maximumKeyboardBrightness);
+    Q_EMIT maximumKeyboardBrightnessChanged(m_maximumKeyboardBrightness);
 
     setKeyboardBrightnessAvailable(m_maximumKeyboardBrightness > 0);
 }

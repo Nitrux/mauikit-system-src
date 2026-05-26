@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/mauicore/audio">
-        <file alias="AudioObjectFilterModel.qml">controls/AudioObjectFilterModel.qml</file>
-    </qresource>
-</RCC>

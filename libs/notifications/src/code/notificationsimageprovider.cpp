@@ -24,7 +24,6 @@
 #include <QtGui/QIcon>
 
 #include "notificationimagesstorage.h"
-#include "notificationsdaemon.h"
 #include "notificationsimageprovider.h"
 
 NotificationsImageProvider::NotificationsImageProvider()

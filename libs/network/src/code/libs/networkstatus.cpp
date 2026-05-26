@@ -69,7 +69,7 @@ NetworkStatus::NetworkStatus(QObject *parent)
     statusChanged(NetworkManager::status());
 
     QDBusPendingReply<uint> pendingReply = NetworkManager::checkConnectivity();
-    auto callWatcher = new QDBusPendingCallWatcher(pendingReply);
+    auto callWatcher = new QDBusPendingCallWatcher(pendingReply, this);
     connect(callWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
         QDBusPendingReply<uint> reply = *watcher;
         if (reply.isValid()) {

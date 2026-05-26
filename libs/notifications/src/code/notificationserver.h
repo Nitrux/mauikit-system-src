@@ -27,7 +27,7 @@ public:
     Q_ENUM(CloseReason)
 
     explicit NotificationServer(QObject *parent = nullptr);
-~NotificationServer();
+    ~NotificationServer();
 
     bool registerService();
     void unregisterService();
@@ -71,7 +71,6 @@ Q_SIGNALS:
 
 private:
     uint m_highestId = -1;
-    QAtomicInt *m_idSeed;
     QSet<QString> m_spamApplications;
 
     Notification m_lastNotification;

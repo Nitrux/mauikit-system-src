@@ -57,6 +57,17 @@ Handler::SecretStorageMode modeFromInt(int rawMode)
     }
     return Handler::NmOwnedStorage;
 }
+
+QString escapeWifiQrField(const QString &value)
+{
+    QString escaped = value;
+    escaped.replace(QStringLiteral("\\"), QStringLiteral("\\\\"));
+    escaped.replace(QLatin1Char(';'), QStringLiteral("\\;"));
+    escaped.replace(QLatin1Char(','), QStringLiteral("\\,"));
+    escaped.replace(QLatin1Char(':'), QStringLiteral("\\:"));
+    escaped.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    return escaped;
+}
 }
 
 Handler::Handler(QObject *parent)
@@ -182,7 +193,7 @@ void Handler::requestWifiCode(const QString &connectionPath, const QString &ssid
 
     auto securityType = static_cast<NetworkManager::WirelessSecurityType>(_securityType);
 
-    QString ret = QStringLiteral("WIFI:S:") + ssid + QLatin1Char(';');
+    QString ret = QStringLiteral("WIFI:S:") + escapeWifiQrField(ssid) + QLatin1Char(';');
     if (securityType != NetworkManager::NoneSecurity) {
         switch (securityType) {
         case NetworkManager::NoneSecurity:
@@ -375,12 +386,20 @@ void add_connection_cb(GObject *client, GAsyncResult *result, gpointer user_data
         g_object_unref(connection);
     }
 
+    if (client) {
+        g_object_unref(client);
+    }
+
     delete data;
 }
 
 void Handler::addConnection(NMConnection *connection)
 {
     NMClient *client = nm_client_new(nullptr, nullptr);
+    if (!client) {
+        qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Unable to initialize NetworkManager client while adding connection";
+        return;
+    }
 
     AddConnectionData *userData = new AddConnectionData{QString::fromUtf8(nm_connection_get_id(connection)), this};
 
@@ -622,7 +641,8 @@ QCoro::Task<void> Handler::requestScanInternal(const QString &interface)
             NetworkManager::WirelessDevice::Ptr wifiDevice = device.objectCast<NetworkManager::WirelessDevice>();
 
             if (wifiDevice && wifiDevice->state() != NetworkManager::WirelessDevice::Unavailable) {
-                if (!interface.isEmpty() && interface != wifiDevice->interfaceName()) {
+                const QString currentInterface = wifiDevice->interfaceName();
+                if (!interface.isEmpty() && interface != currentInterface) {
                     continue;
                 }
 
@@ -638,29 +658,28 @@ QCoro::Task<void> Handler::requestScanInternal(const QString &interface)
                     } else if (lastRequestScan.isValid() && lastRequestScan.msecsTo(now) < NM_REQUESTSCAN_LIMIT_RATE) {
                         timeout = NM_REQUESTSCAN_LIMIT_RATE - lastRequestScan.msecsTo(now);
                     }
-                    qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Rescheduling a request scan for" << wifiDevice->interfaceName() << "in" << timeout;
-                    scheduleRequestScan(wifiDevice->interfaceName(), timeout);
+                    qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Rescheduling a request scan for" << currentInterface << "in" << timeout;
+                    scheduleRequestScan(currentInterface, timeout);
 
                     if (!interface.isEmpty()) {
                         co_return;
                     }
                     continue;
-                } else if (m_wirelessScanRetryTimer.contains(interface)) {
-                    m_wirelessScanRetryTimer.value(interface)->stop();
-                    delete m_wirelessScanRetryTimer.take(interface);
+                } else if (m_wirelessScanRetryTimer.contains(currentInterface)) {
+                    m_wirelessScanRetryTimer.value(currentInterface)->stop();
+                    delete m_wirelessScanRetryTimer.take(currentInterface);
                 }
 
-                qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Requesting wifi scan on device" << wifiDevice->interfaceName();
+                qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Requesting wifi scan on device" << currentInterface;
 
                 incrementScansCount();
                 QDBusReply<void> reply = co_await wifiDevice->requestScan();
 
                 if (!reply.isValid()) {
-                    const QString interface = wifiDevice->interfaceName();
-                    qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Wireless scan on" << interface << "failed:" << reply.error().message();
-                    scanRequestFailed(interface);
+                    qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Wireless scan on" << currentInterface << "failed:" << reply.error().message();
+                    scanRequestFailed(currentInterface);
                 } else {
-                    qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Wireless scan on" << wifiDevice->interfaceName() << "succeeded";
+                    qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Wireless scan on" << currentInterface << "succeeded";
                 }
                 decrementScansCount();
             }
@@ -970,7 +989,7 @@ void Handler::scheduleRequestScan(const QString &interface, int timeout)
     QTimer *timer;
     if (!m_wirelessScanRetryTimer.contains(interface)) {
         // create a timer for the interface
-        timer = new QTimer();
+        timer = new QTimer(this);
         timer->setSingleShot(true);
         m_wirelessScanRetryTimer.insert(interface, timer);
         auto retryAction = [this, interface]() {
@@ -1037,7 +1056,7 @@ void Handler::slotRequestWifiCode(QDBusPendingCallWatcher *watcher)
         return;
     }
     if (!pass.isEmpty()) {
-        ret += QStringLiteral("P:") % pass % QLatin1Char(';');
+        ret += QStringLiteral("P:") % escapeWifiQrField(pass) % QLatin1Char(';');
     }
 
     Q_EMIT wifiCodeReceived(ret % QLatin1Char(';'), ssid);

@@ -17,12 +17,11 @@ Q_LOGGING_CATEGORY(NOTIFICATIONS, "cask.notifications")
 
 NotificationServer::NotificationServer(QObject *parent)
     : QObject(parent)
-    , m_notificationWatcher(nullptr)
+    , m_notificationWatcher(new QDBusServiceWatcher(this))
 {
     new NotificationsAdaptor(this);
 
-    // Create a seed for notifications identifiers, starting from 1
-    m_idSeed = new QAtomicInt(1);
+    m_notificationWatcher->setWatchMode(QDBusServiceWatcher::WatchForUnregistration);
 
     // List of applications that will send us too many notifications
     // TODO: Add more from configuration
@@ -33,7 +32,6 @@ NotificationServer::NotificationServer(QObject *parent)
 NotificationServer::~NotificationServer()
 {
     unregisterService();
-    delete m_idSeed;
 }
 
 bool NotificationServer::registerService()
@@ -82,7 +80,6 @@ uint NotificationServer::Notify(const QString &app_name,
                                 const QVariantMap &hints,
                                 int timeout)
 {
-    Q_UNUSED(hints);
     qDebug() << "NOTIFY" << summary;
     uint id = 0;
 
@@ -241,12 +238,26 @@ bool NotificationServer::inhibited() const
 
 void NotificationServer::RegisterWatcher()
 {
-    m_notificationWatcher->addWatchedService(message().service());
+    if (!m_notificationWatcher) {
+        return;
+    }
+
+    const QString service = message().service();
+    if (!service.isEmpty()) {
+        m_notificationWatcher->addWatchedService(service);
+    }
 }
 
 void NotificationServer::UnRegisterWatcher()
 {
-    m_notificationWatcher->removeWatchedService(message().service());
+    if (!m_notificationWatcher) {
+        return;
+    }
+
+    const QString service = message().service();
+    if (!service.isEmpty()) {
+        m_notificationWatcher->removeWatchedService(service);
+    }
 }
 
 void NotificationServer::InvokeAction(uint id, const QString &actionKey)

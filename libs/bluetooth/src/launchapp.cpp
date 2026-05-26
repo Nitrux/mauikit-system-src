@@ -61,7 +61,7 @@ void LaunchApp::startDiscovery(const QString &adapterUbi)
         propertiesIface.call(QStringLiteral("Set"),
                              QString::fromLatin1(ADAPTER_IFACE),
                              QStringLiteral("Pairable"),
-                             QDBusVariant(true));
+                             QVariant::fromValue(QDBusVariant(QVariant(true))));
     }
 
     QDBusInterface adapterIface(QString::fromLatin1(BLUEZ_SERVICE),

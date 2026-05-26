@@ -80,7 +80,7 @@ PowerProfile::PowerProfile(QObject *parent) : QObject(parent)
                                                      QStringLiteral("/org/kde/Solid/PowerManagement/Actions/PowerProfile"),
                                                      QStringLiteral("org.kde.Solid.PowerManagement.Actions.PowerProfile"),
                                                      QStringLiteral("currentProfile"));
-    auto profileWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(profileMsg));
+    auto profileWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(profileMsg), this);
     connect(profileWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
         watcher->deleteLater();
         QDBusPendingReply<QString> reply = *watcher;
@@ -94,7 +94,7 @@ PowerProfile::PowerProfile(QObject *parent) : QObject(parent)
                                                      QStringLiteral("/org/kde/Solid/PowerManagement/Actions/PowerProfile"),
                                                      QStringLiteral("org.kde.Solid.PowerManagement.Actions.PowerProfile"),
                                                      QStringLiteral("profileChoices"));
-    auto choicesWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(choicesMsg));
+    auto choicesWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(choicesMsg), this);
     connect(choicesWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
         watcher->deleteLater();
         QDBusPendingReply<QStringList> reply = *watcher;
@@ -108,7 +108,7 @@ PowerProfile::PowerProfile(QObject *parent) : QObject(parent)
                                                        QStringLiteral("/org/kde/Solid/PowerManagement/Actions/PowerProfile"),
                                                        QStringLiteral("org.kde.Solid.PowerManagement.Actions.PowerProfile"),
                                                        QStringLiteral("performanceInhibitedReason"));
-    auto inhibitedWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(inhibitedMsg));
+    auto inhibitedWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(inhibitedMsg), this);
     connect(inhibitedWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
         watcher->deleteLater();
         QDBusPendingReply<QString> reply = *watcher;
@@ -122,7 +122,7 @@ PowerProfile::PowerProfile(QObject *parent) : QObject(parent)
                                                       QStringLiteral("/org/kde/Solid/PowerManagement/Actions/PowerProfile"),
                                                       QStringLiteral("org.kde.Solid.PowerManagement.Actions.PowerProfile"),
                                                       QStringLiteral("performanceDegradedReason"));
-    auto degradedWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(degradedMsg));
+    auto degradedWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(degradedMsg), this);
     connect(degradedWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
         watcher->deleteLater();
         QDBusPendingReply<QString> reply = *watcher;
@@ -136,7 +136,7 @@ PowerProfile::PowerProfile(QObject *parent) : QObject(parent)
                                                    QStringLiteral("/org/kde/Solid/PowerManagement/Actions/PowerProfile"),
                                                    QStringLiteral("org.kde.Solid.PowerManagement.Actions.PowerProfile"),
                                                    QStringLiteral("profileHolds"));
-    auto holdsWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(holdsMsg));
+    auto holdsWatcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(holdsMsg), this);
     connect(holdsWatcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *watcher) {
         watcher->deleteLater();
         QDBusPendingReply<QList<QVariantMap>> reply = *watcher;
