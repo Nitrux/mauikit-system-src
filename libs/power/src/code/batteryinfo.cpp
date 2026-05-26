@@ -146,9 +146,8 @@ void BatteryInfo::init()
 
     if (!QDBusConnection::sessionBus().interface()->isServiceRegistered(SOLID_POWERMANAGEMENT_SERVICE))
     {
-        qWarning() << SOLID_POWERMANAGEMENT_SERVICE << " is not registered";
         return;
-    }    
+    }
 
     QDBusConnection::sessionBus().connect(QStringLiteral("org.freedesktop.PowerManagement"),
                                           QStringLiteral("/org/freedesktop/PowerManagement"),

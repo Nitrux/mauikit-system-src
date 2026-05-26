@@ -90,9 +90,6 @@ BrightnessControl::BrightnessControl(QObject *parent) : QObject(parent)
         QDBusPendingReply<int> reply = *watcher;
         if (!reply.isError()) {
             setMaximumScreenBrightness(reply.value());
-        }else
-        {
-            qDebug() << "POWER" << reply.error().message();
         }
         watcher->deleteLater();
     });

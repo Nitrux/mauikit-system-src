@@ -48,10 +48,7 @@ PowermanagementEngine::PowermanagementEngine(QObject *parent)
 
 void PowermanagementEngine::init()
 {
-    if (QDBusConnection::sessionBus().interface()->isServiceRegistered(SOLID_POWERMANAGEMENT_SERVICE))
-    {
-        qDebug() << "POWER IS REGISTERED" << SOLID_POWERMANAGEMENT_SERVICE;
-    }
+    Q_UNUSED(SOLID_POWERMANAGEMENT_SERVICE);
 }
 
 bool PowermanagementEngine::sourceRequestEvent(const QString &name)
@@ -85,7 +82,6 @@ bool PowermanagementEngine::sourceRequestEvent(const QString &name)
     } else if (name == QLatin1String("UserActivity")) {
         setData(QStringLiteral("UserActivity"), QStringLiteral("IdleTime"), KIdleTime::instance()->idleTime());
     } else {
-        qDebug() << "Data for '" << name << "' not found";
         return false;
     }
     return true;
@@ -93,7 +89,9 @@ bool PowermanagementEngine::sourceRequestEvent(const QString &name)
 
 void PowermanagementEngine::setData(const QString &name, const QString &name2, const QVariant &value)
 {
-    qDebug() << "POWER DATA CHANGED" << name << name2 << value;
+    Q_UNUSED(name);
+    Q_UNUSED(name2);
+    Q_UNUSED(value);
 }
 
 void PowermanagementEngine::inhibitionsChanged(const QList<InhibitionInfo> &added, const QStringList &removed)
