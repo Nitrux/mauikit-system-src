@@ -6,6 +6,8 @@ _Shared desktop-integration libraries for the Maui stack._
 
 This repository currently provides the following modules:
 
+
+- `system`: shared control-center/system helper APIs for desktop shells and other Maui apps
 - `audio`: PipeWire/WirePlumber session integration and volume feedback
 - `network`: NetworkManager integration for connection management and status
 - `notifications`: Freedesktop notifications integration

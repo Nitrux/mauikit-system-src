@@ -70,5 +70,6 @@ add_subdirectory(notifications)
 add_subdirectory(power)
 add_subdirectory(network)
 add_subdirectory(bluetooth)
+add_subdirectory(system)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)
