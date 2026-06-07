@@ -24,7 +24,7 @@ if(MAUIKITSYSTEM_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$"
 endif()
 
 
-set(MAUIKITSYSTEM_VERSION 0.6.6)
+set(MAUIKITSYSTEM_VERSION 4.0.4)
 
 add_subdirectory(libs)
 
