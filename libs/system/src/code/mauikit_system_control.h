@@ -3,46 +3,47 @@
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
+#include "control_export.h"
 
 namespace MauiKitSystem
 {
-bool runCommandText(const QString &program,
+CONTROL_EXPORT bool runCommandText(const QString &program,
                     const QStringList &arguments,
                     QString *stdOut = nullptr,
                     int timeoutMs = 350);
 
-int parseBatteryPercent(const QString &value);
-QString systemUserRealName();
-QString normalizeControlCenterNetworkMode(const QString &value);
-QString normalizeControlCenterBluetoothState(const QString &value);
-QString normalizeControlCenterVolumeState(const QString &value);
-QString normalizeControlCenterIconMode(const QString &value);
-QString normalizeBatteryPercentage(const QString &value);
-QString defaultRouteInterface();
-bool isWirelessInterface(const QString &interfaceName);
-QString networkStateFromNmcliStatus();
-bool controlCenterBluetoothAvailable();
-bool controlCenterBluetoothEnabled();
-bool readCpuUsagePercent(int *percent);
-bool readRamUsagePercent(int *percent);
-bool readDiskUsage(const QString &path, QString *usageText, int *percent);
-QStringList powerProfilesFromPowerProfilesCtl();
-bool currentPowerProfile(QString *currentProfile);
-bool setCurrentPowerProfile(const QString &profile);
-bool readBatteryCharge(const QString &batteryPath, QString *capacityText, QString *statusText);
-bool batteryPowerSupplyState(QString *batteryPath, bool *mainsOnline);
-QVariantList diskUsagePartitionOptions(const QString &currentPath);
-bool currentControlCenterVolumeState(QString *percentText, bool *muted);
-bool setControlCenterVolumePercent(int percent);
-bool currentControlCenterBrightnessPercent(QString *percentText);
-bool setControlCenterBrightnessPercent(int percent);
-bool controlCenterNightLightAvailable();
-bool controlCenterNightLightRunning();
-bool startControlCenterNightLight();
-bool stopControlCenterNightLight();
-bool executeControlCenterPowerCommand(const QString &command);
-bool processRunning(const QString &processName);
-bool commandAvailable(const QString &program);
-bool stopProcessByName(const QString &processName);
-bool systemSupportsBacklightAdjustment();
+CONTROL_EXPORT int parseBatteryPercent(const QString &value);
+CONTROL_EXPORT QString systemUserRealName();
+CONTROL_EXPORT QString normalizeControlCenterNetworkMode(const QString &value);
+CONTROL_EXPORT QString normalizeControlCenterBluetoothState(const QString &value);
+CONTROL_EXPORT QString normalizeControlCenterVolumeState(const QString &value);
+CONTROL_EXPORT QString normalizeControlCenterIconMode(const QString &value);
+CONTROL_EXPORT QString normalizeBatteryPercentage(const QString &value);
+CONTROL_EXPORT QString defaultRouteInterface();
+CONTROL_EXPORT bool isWirelessInterface(const QString &interfaceName);
+CONTROL_EXPORT QString networkStateFromNmcliStatus();
+CONTROL_EXPORT bool controlCenterBluetoothAvailable();
+CONTROL_EXPORT bool controlCenterBluetoothEnabled();
+CONTROL_EXPORT bool readCpuUsagePercent(int *percent);
+CONTROL_EXPORT bool readRamUsagePercent(int *percent);
+CONTROL_EXPORT bool readDiskUsage(const QString &path, QString *usageText, int *percent);
+CONTROL_EXPORT QStringList powerProfilesFromPowerProfilesCtl();
+CONTROL_EXPORT bool currentPowerProfile(QString *currentProfile);
+CONTROL_EXPORT bool setCurrentPowerProfile(const QString &profile);
+CONTROL_EXPORT bool readBatteryCharge(const QString &batteryPath, QString *capacityText, QString *statusText);
+CONTROL_EXPORT bool batteryPowerSupplyState(QString *batteryPath, bool *mainsOnline);
+CONTROL_EXPORT QVariantList diskUsagePartitionOptions(const QString &currentPath);
+CONTROL_EXPORT bool currentControlCenterVolumeState(QString *percentText, bool *muted);
+CONTROL_EXPORT bool setControlCenterVolumePercent(int percent);
+CONTROL_EXPORT bool currentControlCenterBrightnessPercent(QString *percentText);
+CONTROL_EXPORT bool setControlCenterBrightnessPercent(int percent);
+CONTROL_EXPORT bool controlCenterNightLightAvailable();
+CONTROL_EXPORT bool controlCenterNightLightRunning();
+CONTROL_EXPORT bool startControlCenterNightLight();
+CONTROL_EXPORT bool stopControlCenterNightLight();
+CONTROL_EXPORT bool executeControlCenterPowerCommand(const QString &command);
+CONTROL_EXPORT bool processRunning(const QString &processName);
+CONTROL_EXPORT bool commandAvailable(const QString &program);
+CONTROL_EXPORT bool stopProcessByName(const QString &processName);
+CONTROL_EXPORT bool systemSupportsBacklightAdjustment();
 }

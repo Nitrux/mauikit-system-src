@@ -8,6 +8,8 @@ project(MauiKitSystemControl LANGUAGES CXX VERSION ${MAUIKITSYSTEM_VERSION})
 
 find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core DBus REQUIRED)
 
+include(GenerateExportHeader)
+
 set(CMAKECONFIG_INSTALL_DIR "${KDE_INSTALL_CMAKEPACKAGEDIR}/MauiKitSystemControl")
 
 configure_package_config_file(
@@ -38,6 +40,7 @@ target_sources(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME}
     PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/code>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
     "$<INSTALL_INTERFACE:${KDE_INSTALL_INCLUDEDIR}/Maui/Core/System>")
 
 target_link_libraries(${PROJECT_NAME}
@@ -45,6 +48,7 @@ target_link_libraries(${PROJECT_NAME}
     Qt6::Core
     Qt6::DBus)
 
+generate_export_header(${PROJECT_NAME} BASE_NAME Control)
 set_target_properties(${PROJECT_NAME} PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -57,6 +61,7 @@ install(EXPORT MauiKitSystemControlTargets
     NAMESPACE MauiKitSystem::)
 install(FILES
     src/code/mauikit_system_control.h
-    ${CMAKE_CURRENT_BINARY_DIR}/mauikitsystemcontrol_version.h
+    "${CMAKE_CURRENT_BINARY_DIR}/control_export.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/mauikitsystemcontrol_version.h"
     DESTINATION ${KDE_INSTALL_INCLUDEDIR}/Maui/Core/System
     COMPONENT Devel)
