@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(MauiKitSystemLibs)
 
+
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR "This project supports Linux only.")
 endif()
