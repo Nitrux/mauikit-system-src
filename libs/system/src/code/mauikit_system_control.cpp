@@ -195,6 +195,19 @@ bool isWirelessInterface(const QString &interfaceName)
     return interfaceName.startsWith(QLatin1String("wl"), Qt::CaseInsensitive);
 }
 
+bool controlCenterWirelessAvailable()
+{
+    QDir netDir(QStringLiteral("/sys/class/net"));
+    const QStringList interfaces = netDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &interfaceName : interfaces)
+    {
+        if (isWirelessInterface(interfaceName))
+            return true;
+    }
+
+    return false;
+}
+
 QString networkStateFromNmcliStatus()
 {
     QString output;
@@ -266,6 +279,26 @@ bool controlCenterBluetoothEnabled()
     }
 
     return false;
+}
+
+int controlCenterBluetoothConnectedDeviceCount()
+{
+    if (!controlCenterBluetoothAvailable())
+        return 0;
+
+    QString output;
+    if (!runCommandText(QStringLiteral("bluetoothctl"), QStringList { QStringLiteral("devices"), QStringLiteral("Connected") }, &output, 1000))
+        return 0;
+
+    int count = 0;
+    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &line : lines)
+    {
+        if (line.trimmed().startsWith(QStringLiteral("Device ")))
+            count += 1;
+    }
+
+    return count;
 }
 
 bool readCpuUsagePercent(int *percent)
@@ -674,6 +707,26 @@ bool executeControlCenterPowerCommand(const QString &command)
 
     if (command.compare(QStringLiteral("wlogout"), Qt::CaseInsensitive) != 0)
         return QProcess::startDetached(QStringLiteral("/bin/sh"), QStringList { QStringLiteral("-lc"), QStringLiteral("wlogout") });
+
+    return false;
+}
+
+bool executeControlCenterSettingsCommand(const QString &command)
+{
+    const QStringList candidates = {
+        command.trimmed(),
+        QStringLiteral("systemsettings"),
+        QStringLiteral("maui-settings"),
+    };
+
+    for (const QString &candidate : candidates)
+    {
+        if (candidate.isEmpty())
+            continue;
+
+        if (QProcess::startDetached(QStringLiteral("/bin/sh"), QStringList { QStringLiteral("-lc"), candidate }))
+            return true;
+    }
 
     return false;
 }
