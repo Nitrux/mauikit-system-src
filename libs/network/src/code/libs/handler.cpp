@@ -472,6 +472,9 @@ QCoro::Task<void> Handler::deactivateConnectionInternal(const QString &_connecti
 void Handler::disconnectAll()
 {
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         device->disconnectInterface();
     }
 }
@@ -637,6 +640,9 @@ void Handler::requestScan(const QString &interface)
 QCoro::Task<void> Handler::requestScanInternal(const QString &interface)
 {
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         if (device->type() == NetworkManager::Device::Wifi) {
             NetworkManager::WirelessDevice::Ptr wifiDevice = device.objectCast<NetworkManager::WirelessDevice>();
 
@@ -727,6 +733,9 @@ QCoro::Task<void> Handler::createHotspotInternal()
     wifiSetting->setSsid(Configuration::self().hotspotName().toUtf8());
 
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         if (device->type() == NetworkManager::Device::Wifi) {
             wifiDev = device.objectCast<NetworkManager::WirelessDevice>();
             if (wifiDev) {
@@ -957,6 +966,9 @@ bool Handler::checkHotspotSupported()
         bool wifiFound = false;
 
         for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+            if (!device) {
+                continue;
+            }
             if (device->type() == NetworkManager::Device::Wifi) {
                 wifiFound = true;
 

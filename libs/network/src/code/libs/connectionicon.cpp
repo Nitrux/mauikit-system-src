@@ -41,6 +41,9 @@ ConnectionIcon::ConnectionIcon(QObject *parent)
     connect(NetworkManager::notifier(), &NetworkManager::Notifier::wwanHardwareEnabledChanged, this, &ConnectionIcon::wwanEnabledChanged);
 
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         if (device->type() == NetworkManager::Device::Ethernet) {
             NetworkManager::WiredDevice::Ptr wiredDevice = device.staticCast<NetworkManager::WiredDevice>();
             if (wiredDevice) {
@@ -399,6 +402,9 @@ void ConnectionIcon::setDisconnectedIcon()
     m_vpn = false;
 
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         if (device->type() == NetworkManager::Device::Ethernet) {
             NetworkManager::WiredDevice::Ptr wiredDev = device.objectCast<NetworkManager::WiredDevice>();
             if (wiredDev->carrier()) {

@@ -12,6 +12,9 @@ AvailableDevices::AvailableDevices(QObject *parent)
     : QObject(parent)
 {
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         if (device->type() == NetworkManager::Device::Modem) {
             m_modemDeviceAvailable = true;
         } else if (device->type() == NetworkManager::Device::Wifi) {
@@ -78,6 +81,9 @@ void AvailableDevices::deviceRemoved()
     bool bluetooth = false;
 
     for (const NetworkManager::Device::Ptr &device : NetworkManager::networkInterfaces()) {
+        if (!device) {
+            continue;
+        }
         if (device->type() == NetworkManager::Device::Modem) {
             modem = true;
         } else if (device->type() == NetworkManager::Device::Wifi) {
