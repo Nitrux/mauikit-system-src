@@ -38,7 +38,7 @@ constexpr auto REGISTER_RETRY_INTERVAL_MS = 1500;
 class ObexReceiveAgent final : public BluezQt::ObexAgent
 {
 public:
-    explicit ObexReceiveAgent(ObexAgent *controller)
+    explicit ObexReceiveAgent(::ObexAgent *controller)
         : BluezQt::ObexAgent(controller)
         , m_controller(controller)
     {
@@ -46,7 +46,7 @@ public:
 
     QDBusObjectPath objectPath() const override
     {
-        return QDBusObjectPath(QStringLiteral(AGENT_PATH));
+        return QDBusObjectPath(QString::fromLatin1(AGENT_PATH));
     }
 
     void authorizePush(BluezQt::ObexTransferPtr transfer, BluezQt::ObexSessionPtr session, const BluezQt::Request<QString> &request) override
@@ -85,7 +85,7 @@ public:
     }
 
 private:
-    QPointer<ObexAgent> m_controller;
+    QPointer<::ObexAgent> m_controller;
 };
 
 ObexAgent::ObexAgent(QObject *parent)
@@ -318,7 +318,7 @@ bool ObexAgent::ensureObexdRunning()
 bool ObexAgent::isObexServiceRegistered() const
 {
     auto *iface = QDBusConnection::sessionBus().interface();
-    return iface && iface->isServiceRegistered(QStringLiteral(OBEX_SERVICE));
+    return iface && iface->isServiceRegistered(QString::fromLatin1(OBEX_SERVICE));
 }
 
 void ObexAgent::initializeManager()
