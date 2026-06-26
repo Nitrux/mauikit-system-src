@@ -29,4 +29,18 @@ target_link_libraries(MauiKitSystemBluetooth
 ecm_add_qml_module(MauiKitSystemBluetooth URI org.mauikit.system.bluetooth GENERATE_PLUGIN_SOURCE)
 ecm_finalize_qml_module(MauiKitSystemBluetooth)
 
+add_executable(maui-bluetooth-obex-agent
+    obexagent.cpp
+    obexagent.h
+    obexagent_main.cpp
+)
+
+target_link_libraries(maui-bluetooth-obex-agent
+    PRIVATE
+        Qt6::Core
+        Qt6::DBus
+        KF6::I18n
+)
+
 install(TARGETS MauiKitSystemBluetooth ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS maui-bluetooth-obex-agent ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
