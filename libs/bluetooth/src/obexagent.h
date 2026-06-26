@@ -6,49 +6,54 @@
 
 #pragma once
 
-#include <QDBusObjectPath>
 #include <QObject>
 #include <QProcess>
-#include <QVariantMap>
+#include <QTimer>
 
-class QDBusServiceWatcher;
+namespace BluezQt
+{
+class InitObexManagerJob;
+class ObexManager;
+class PendingCall;
+}
+
+class ObexReceiveAgent;
 
 class ObexAgent : public QObject
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.bluez.obex.Agent1")
 
 public:
     explicit ObexAgent(QObject *parent = nullptr);
     ~ObexAgent() override;
 
     bool initialize();
-
-public Q_SLOTS:
-    QString AuthorizePush(const QDBusObjectPath &transfer);
-    void Cancel();
-    void Release();
+    QString uniqueDestinationFor(const QString &fileName) const;
+    void handleAgentReleased();
 
 private Q_SLOTS:
-    void handleObexServiceRegistered(const QString &serviceName);
-    void handleObexServiceUnregistered(const QString &serviceName);
     void handleObexdError(QProcess::ProcessError error);
     void handleObexdFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void handleManagerInitResult(BluezQt::InitObexManagerJob *job);
+    void handleOperationalChanged(bool operational);
+    void handleRegisterAgentFinished(BluezQt::PendingCall *call);
+    void retryInitialization();
 
 private:
-    static QString obexServiceName();
     static QString obexRootPath();
     static QString obexdBinary();
 
     bool ensureObexdRunning();
     bool isObexServiceRegistered() const;
-    bool registerAgent();
-    void unregisterAgent();
-    QString transferName(const QDBusObjectPath &transfer) const;
-    QString uniqueDestinationFor(const QString &fileName) const;
+    void initializeManager();
+    void registerAgent();
 
     QProcess m_obexdProcess;
-    QDBusServiceWatcher *m_serviceWatcher = nullptr;
+    QTimer m_retryTimer;
+    BluezQt::ObexManager *m_obexManager = nullptr;
+    ObexReceiveAgent *m_receiveAgent = nullptr;
     bool m_startedObexd = false;
+    bool m_managerInitStarted = false;
+    bool m_registerPending = false;
     bool m_agentRegistered = false;
 };

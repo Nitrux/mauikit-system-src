@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 3.16)
 project(MauiKitSystemControl LANGUAGES CXX VERSION ${MAUIKITSYSTEM_VERSION})
 
 find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core DBus REQUIRED)
+find_package(KF6 ${REQUIRED_KF_VERSION} REQUIRED COMPONENTS BluezQt)
 
 include(GenerateExportHeader)
 
@@ -35,6 +36,7 @@ add_library(MauiKitSystem::Control ALIAS ${PROJECT_NAME})
 
 target_sources(${PROJECT_NAME}
     PRIVATE
+    src/code/bluetoothcontrolbackend.cpp
     src/code/mauikit_system_control.cpp)
 
 target_include_directories(${PROJECT_NAME}
@@ -46,7 +48,8 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
     Qt6::Core
-    Qt6::DBus)
+    Qt6::DBus
+    KF6::BluezQt)
 
 generate_export_header(${PROJECT_NAME} BASE_NAME Control)
 set_target_properties(${PROJECT_NAME} PROPERTIES

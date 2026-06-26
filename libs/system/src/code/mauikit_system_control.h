@@ -26,6 +26,7 @@ CONTROL_EXPORT QString networkStateFromNmcliStatus();
 CONTROL_EXPORT bool controlCenterBluetoothAvailable();
 CONTROL_EXPORT bool controlCenterBluetoothEnabled();
 CONTROL_EXPORT int controlCenterBluetoothConnectedDeviceCount();
+CONTROL_EXPORT bool setControlCenterBluetoothEnabled(bool enabled);
 CONTROL_EXPORT bool readCpuUsagePercent(int *percent);
 CONTROL_EXPORT bool readRamUsagePercent(int *percent);
 CONTROL_EXPORT bool readDiskUsage(const QString &path, QString *usageText, int *percent);

@@ -39,6 +39,7 @@ target_link_libraries(maui-bluetooth-obex-agent
     PRIVATE
         Qt6::Core
         Qt6::DBus
+        KF6::BluezQt
         KF6::I18n
 )
 

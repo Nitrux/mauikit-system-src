@@ -1,4 +1,5 @@
 #include "mauikit_system_control.h"
+#include "bluetoothcontrolbackend.h"
 
 #include <QByteArray>
 #include <QDir>
@@ -249,56 +250,22 @@ QString networkStateFromNmcliStatus()
 
 bool controlCenterBluetoothAvailable()
 {
-    if (!commandAvailable(QStringLiteral("bluetoothctl")))
-        return false;
-
-    QString output;
-    if (!runCommandText(QStringLiteral("bluetoothctl"), QStringList { QStringLiteral("list") }, &output, 1000))
-        return false;
-
-    return !output.trimmed().isEmpty();
+    return BluetoothControlBackend::instance()->isAvailable();
 }
 
 bool controlCenterBluetoothEnabled()
 {
-    if (!controlCenterBluetoothAvailable())
-        return false;
-
-    QString output;
-    if (!runCommandText(QStringLiteral("bluetoothctl"), QStringList { QStringLiteral("show") }, &output, 1000))
-        return false;
-
-    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-    for (const QString &line : lines)
-    {
-        const QString trimmed = line.trimmed();
-        if (!trimmed.startsWith(QStringLiteral("Powered:"), Qt::CaseInsensitive))
-            continue;
-
-        return trimmed.contains(QStringLiteral("yes"), Qt::CaseInsensitive);
-    }
-
-    return false;
+    return BluetoothControlBackend::instance()->isEnabled();
 }
 
 int controlCenterBluetoothConnectedDeviceCount()
 {
-    if (!controlCenterBluetoothAvailable())
-        return 0;
+    return BluetoothControlBackend::instance()->connectedDeviceCount();
+}
 
-    QString output;
-    if (!runCommandText(QStringLiteral("bluetoothctl"), QStringList { QStringLiteral("devices"), QStringLiteral("Connected") }, &output, 1000))
-        return 0;
-
-    int count = 0;
-    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-    for (const QString &line : lines)
-    {
-        if (line.trimmed().startsWith(QStringLiteral("Device ")))
-            count += 1;
-    }
-
-    return count;
+bool setControlCenterBluetoothEnabled(bool enabled)
+{
+    return BluetoothControlBackend::instance()->setEnabled(enabled);
 }
 
 bool readCpuUsagePercent(int *percent)

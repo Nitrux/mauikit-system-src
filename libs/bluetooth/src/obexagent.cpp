@@ -6,19 +6,22 @@
 
 #include "obexagent.h"
 
-#include <KLocalizedString>
+#include <BluezQt/InitObexManagerJob>
+#include <BluezQt/ObexAgent>
+#include <BluezQt/ObexManager>
+#include <BluezQt/ObexSession>
+#include <BluezQt/ObexTransfer>
+#include <BluezQt/PendingCall>
+#include <BluezQt/Request>
 
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
-#include <QDBusError>
-#include <QDBusInterface>
-#include <QDBusReply>
-#include <QDBusServiceWatcher>
-#include <QDBusVariant>
+#include <QDBusObjectPath>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QLoggingCategory>
+#include <QPointer>
 #include <QStandardPaths>
 
 Q_LOGGING_CATEGORY(MAUI_OBEX_AGENT, "org.mauikit.system.bluetooth.obexagent")
@@ -26,22 +29,78 @@ Q_LOGGING_CATEGORY(MAUI_OBEX_AGENT, "org.mauikit.system.bluetooth.obexagent")
 namespace
 {
 constexpr auto AGENT_PATH = "/org/mauikit/system/bluetooth/obexagent";
-constexpr auto AGENT_MANAGER_IFACE = "org.bluez.obex.AgentManager1";
-constexpr auto DBUS_PROPERTIES_IFACE = "org.freedesktop.DBus.Properties";
-constexpr auto OBEX_TRANSFER_IFACE = "org.bluez.obex.Transfer1";
+constexpr auto OBEX_SERVICE = "org.bluez.obex";
 constexpr auto OBEXD_FALLBACK_BIN = "obexd";
 constexpr auto OBEXD_PRIMARY_BIN = "/usr/libexec/bluetooth/obexd";
+constexpr auto REGISTER_RETRY_INTERVAL_MS = 1500;
 }
+
+class ObexReceiveAgent final : public BluezQt::ObexAgent
+{
+public:
+    explicit ObexReceiveAgent(ObexAgent *controller)
+        : BluezQt::ObexAgent(controller)
+        , m_controller(controller)
+    {
+    }
+
+    QDBusObjectPath objectPath() const override
+    {
+        return QDBusObjectPath(QStringLiteral(AGENT_PATH));
+    }
+
+    void authorizePush(BluezQt::ObexTransferPtr transfer, BluezQt::ObexSessionPtr session, const BluezQt::Request<QString> &request) override
+    {
+        Q_UNUSED(session)
+
+        QString fileName;
+        if (transfer) {
+            fileName = QFileInfo(transfer->name()).fileName();
+        }
+        if (fileName.isEmpty()) {
+            fileName = QStringLiteral("incoming-file");
+        }
+
+        if (!m_controller) {
+            request.cancel();
+            return;
+        }
+
+        const QString destination = m_controller->uniqueDestinationFor(fileName);
+        qCInfo(MAUI_OBEX_AGENT) << "Authorizing incoming OBEX transfer to" << destination;
+        request.accept(destination);
+    }
+
+    void cancel() override
+    {
+        qCInfo(MAUI_OBEX_AGENT) << "Incoming OBEX transfer authorization canceled";
+    }
+
+    void release() override
+    {
+        qCInfo(MAUI_OBEX_AGENT) << "OBEX agent released by obexd";
+        if (m_controller) {
+            m_controller->handleAgentReleased();
+        }
+    }
+
+private:
+    QPointer<ObexAgent> m_controller;
+};
 
 ObexAgent::ObexAgent(QObject *parent)
     : QObject(parent)
 {
+    m_retryTimer.setInterval(REGISTER_RETRY_INTERVAL_MS);
+    m_retryTimer.setSingleShot(true);
+    connect(&m_retryTimer, &QTimer::timeout, this, &ObexAgent::retryInitialization);
+
+    connect(&m_obexdProcess, &QProcess::errorOccurred, this, &ObexAgent::handleObexdError);
+    connect(&m_obexdProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &ObexAgent::handleObexdFinished);
 }
 
 ObexAgent::~ObexAgent()
 {
-    unregisterAgent();
-
     if (m_startedObexd && m_obexdProcess.state() != QProcess::NotRunning) {
         m_obexdProcess.terminate();
         if (!m_obexdProcess.waitForFinished(3000)) {
@@ -53,89 +112,149 @@ ObexAgent::~ObexAgent()
 
 bool ObexAgent::initialize()
 {
-    auto sessionBus = QDBusConnection::sessionBus();
-    if (!sessionBus.isConnected()) {
+    if (!QDBusConnection::sessionBus().isConnected()) {
         qCWarning(MAUI_OBEX_AGENT) << "Session D-Bus is not available";
         return false;
     }
 
-    if (!sessionBus.registerObject(QString::fromLatin1(AGENT_PATH), this, QDBusConnection::ExportAllSlots)) {
-        qCWarning(MAUI_OBEX_AGENT) << "Failed to register OBEX agent object:" << sessionBus.lastError().message();
-        return false;
-    }
-
-    m_serviceWatcher = new QDBusServiceWatcher(obexServiceName(),
-                                               sessionBus,
-                                               QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration,
-                                               this);
-    connect(m_serviceWatcher, &QDBusServiceWatcher::serviceRegistered, this, &ObexAgent::handleObexServiceRegistered);
-    connect(m_serviceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &ObexAgent::handleObexServiceUnregistered);
-
-    connect(&m_obexdProcess, &QProcess::errorOccurred, this, &ObexAgent::handleObexdError);
-    connect(&m_obexdProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &ObexAgent::handleObexdFinished);
-
-    if (!isObexServiceRegistered() && !ensureObexdRunning()) {
-        return false;
-    }
-
-    if (isObexServiceRegistered()) {
-        return registerAgent();
-    }
-
-    qCInfo(MAUI_OBEX_AGENT) << "Waiting for org.bluez.obex to appear on the session bus";
+    retryInitialization();
     return true;
 }
 
-QString ObexAgent::AuthorizePush(const QDBusObjectPath &transfer)
+QString ObexAgent::uniqueDestinationFor(const QString &fileName) const
 {
-    const QString name = transferName(transfer);
-    const QString destination = uniqueDestinationFor(name);
-    qCInfo(MAUI_OBEX_AGENT) << "Authorizing incoming OBEX transfer" << transfer.path() << "to" << destination;
-    return destination;
-}
+    const QDir downloadDir(obexRootPath());
+    const QFileInfo fileInfo(fileName);
+    const QString resolvedName = fileInfo.fileName().isEmpty() ? QStringLiteral("incoming-file") : fileInfo.fileName();
+    const QString baseName = QFileInfo(resolvedName).completeBaseName().isEmpty() ? resolvedName : QFileInfo(resolvedName).completeBaseName();
+    const QString suffix = QFileInfo(resolvedName).suffix();
 
-void ObexAgent::Cancel()
-{
-    qCInfo(MAUI_OBEX_AGENT) << "Incoming OBEX transfer authorization canceled";
-}
-
-void ObexAgent::Release()
-{
-    qCInfo(MAUI_OBEX_AGENT) << "OBEX agent released by obexd";
-    m_agentRegistered = false;
-}
-
-void ObexAgent::handleObexServiceRegistered(const QString &serviceName)
-{
-    Q_UNUSED(serviceName)
-    registerAgent();
-}
-
-void ObexAgent::handleObexServiceUnregistered(const QString &serviceName)
-{
-    Q_UNUSED(serviceName)
-    m_agentRegistered = false;
-
-    if (m_startedObexd) {
-        qCWarning(MAUI_OBEX_AGENT) << "org.bluez.obex disappeared; attempting to restart obexd";
-        ensureObexdRunning();
+    QString candidate = downloadDir.filePath(resolvedName);
+    if (!QFileInfo::exists(candidate)) {
+        return candidate;
     }
+
+    for (int counter = 1; counter < 10000; ++counter) {
+        const QString numberedName = suffix.isEmpty()
+            ? QStringLiteral("%1-%2").arg(baseName).arg(counter)
+            : QStringLiteral("%1-%2.%3").arg(baseName).arg(counter).arg(suffix);
+        candidate = downloadDir.filePath(numberedName);
+        if (!QFileInfo::exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    return downloadDir.filePath(QStringLiteral("%1-%2").arg(resolvedName, QString::number(QDateTime::currentMSecsSinceEpoch())));
+}
+
+void ObexAgent::handleAgentReleased()
+{
+    m_agentRegistered = false;
+    m_registerPending = false;
+    retryInitialization();
 }
 
 void ObexAgent::handleObexdError(QProcess::ProcessError error)
 {
     qCWarning(MAUI_OBEX_AGENT) << "obexd process error:" << error << m_obexdProcess.errorString();
+    m_startedObexd = false;
+    retryInitialization();
 }
 
 void ObexAgent::handleObexdFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     qCWarning(MAUI_OBEX_AGENT) << "obexd exited" << exitCode << exitStatus;
     m_startedObexd = false;
+    retryInitialization();
 }
 
-QString ObexAgent::obexServiceName()
+void ObexAgent::handleManagerInitResult(BluezQt::InitObexManagerJob *job)
 {
-    return QStringLiteral("org.bluez.obex");
+    m_managerInitStarted = false;
+
+    if (job->error() != 0) {
+        qCWarning(MAUI_OBEX_AGENT) << "Failed to initialize BluezQt OBEX manager:" << job->errorText();
+        if (!m_retryTimer.isActive()) {
+            m_retryTimer.start();
+        }
+        return;
+    }
+
+    if (m_obexManager && m_obexManager->isOperational()) {
+        registerAgent();
+    } else if (!m_retryTimer.isActive()) {
+        m_retryTimer.start();
+    }
+}
+
+void ObexAgent::handleOperationalChanged(bool operational)
+{
+    if (operational) {
+        registerAgent();
+        return;
+    }
+
+    m_agentRegistered = false;
+    m_registerPending = false;
+    if (!m_retryTimer.isActive()) {
+        m_retryTimer.start();
+    }
+}
+
+void ObexAgent::handleRegisterAgentFinished(BluezQt::PendingCall *call)
+{
+    m_registerPending = false;
+
+    if (!call) {
+        if (!m_retryTimer.isActive()) {
+            m_retryTimer.start();
+        }
+        return;
+    }
+
+    if (call->error() == BluezQt::PendingCall::NoError || call->error() == BluezQt::PendingCall::AlreadyExists) {
+        m_agentRegistered = true;
+        qCInfo(MAUI_OBEX_AGENT) << "Registered OBEX receive agent";
+        return;
+    }
+
+    qCWarning(MAUI_OBEX_AGENT) << "Failed to register OBEX agent:" << call->errorText();
+    if (!m_retryTimer.isActive()) {
+        m_retryTimer.start();
+    }
+}
+
+void ObexAgent::retryInitialization()
+{
+    if (m_agentRegistered || m_registerPending) {
+        return;
+    }
+
+    if (!isObexServiceRegistered() && !ensureObexdRunning()) {
+        if (!m_retryTimer.isActive()) {
+            m_retryTimer.start();
+        }
+        return;
+    }
+
+    if (!m_obexManager) {
+        initializeManager();
+        return;
+    }
+
+    if (m_obexManager->isOperational()) {
+        registerAgent();
+        return;
+    }
+
+    if (!m_obexManager->isInitialized() && !m_managerInitStarted) {
+        initializeManager();
+        return;
+    }
+
+    if (!m_retryTimer.isActive()) {
+        m_retryTimer.start();
+    }
 }
 
 QString ObexAgent::obexRootPath()
@@ -199,108 +318,39 @@ bool ObexAgent::ensureObexdRunning()
 bool ObexAgent::isObexServiceRegistered() const
 {
     auto *iface = QDBusConnection::sessionBus().interface();
-    return iface && iface->isServiceRegistered(obexServiceName());
+    return iface && iface->isServiceRegistered(QStringLiteral(OBEX_SERVICE));
 }
 
-bool ObexAgent::registerAgent()
+void ObexAgent::initializeManager()
 {
-    if (m_agentRegistered) {
-        return true;
+    if (!m_obexManager) {
+        m_obexManager = new BluezQt::ObexManager(this);
+        connect(m_obexManager, &BluezQt::ObexManager::operationalChanged, this, &ObexAgent::handleOperationalChanged);
     }
 
-    QDBusInterface managerIface(obexServiceName(),
-                                QStringLiteral("/org/bluez/obex"),
-                                QString::fromLatin1(AGENT_MANAGER_IFACE),
-                                QDBusConnection::sessionBus(),
-                                this);
-    if (!managerIface.isValid()) {
-        qCWarning(MAUI_OBEX_AGENT) << "OBEX AgentManager1 interface is not available";
-        return false;
-    }
-
-    const QDBusReply<void> reply = managerIface.call(QStringLiteral("RegisterAgent"),
-                                                     QVariant::fromValue(QDBusObjectPath(QString::fromLatin1(AGENT_PATH))));
-    if (!reply.isValid()) {
-        const QString errorName = reply.error().name();
-        if (errorName == QStringLiteral("org.bluez.obex.Error.AlreadyExists")) {
-            m_agentRegistered = true;
-            return true;
-        }
-
-        qCWarning(MAUI_OBEX_AGENT) << "Failed to register OBEX agent:" << errorName << reply.error().message();
-        return false;
-    }
-
-    m_agentRegistered = true;
-    qCInfo(MAUI_OBEX_AGENT) << "Registered OBEX receive agent";
-    return true;
-}
-
-void ObexAgent::unregisterAgent()
-{
-    if (!m_agentRegistered || !isObexServiceRegistered()) {
+    if (m_managerInitStarted) {
         return;
     }
 
-    QDBusInterface managerIface(obexServiceName(),
-                                QStringLiteral("/org/bluez/obex"),
-                                QString::fromLatin1(AGENT_MANAGER_IFACE),
-                                QDBusConnection::sessionBus(),
-                                this);
-    if (!managerIface.isValid()) {
+    m_managerInitStarted = true;
+    BluezQt::InitObexManagerJob *job = m_obexManager->init();
+    connect(job, &BluezQt::InitObexManagerJob::result, this, &ObexAgent::handleManagerInitResult);
+    job->start();
+}
+
+void ObexAgent::registerAgent()
+{
+    if (!m_obexManager || !m_obexManager->isOperational() || m_agentRegistered || m_registerPending) {
         return;
     }
 
-    managerIface.call(QStringLiteral("UnregisterAgent"),
-                      QVariant::fromValue(QDBusObjectPath(QString::fromLatin1(AGENT_PATH))));
-    m_agentRegistered = false;
-}
-
-QString ObexAgent::transferName(const QDBusObjectPath &transfer) const
-{
-    QDBusInterface propertiesIface(obexServiceName(),
-                                   transfer.path(),
-                                   QString::fromLatin1(DBUS_PROPERTIES_IFACE),
-                                   QDBusConnection::sessionBus(),
-                                   nullptr);
-    if (propertiesIface.isValid()) {
-        const QDBusReply<QVariantMap> reply = propertiesIface.call(QStringLiteral("GetAll"),
-                                                                   QString::fromLatin1(OBEX_TRANSFER_IFACE));
-        if (reply.isValid()) {
-            const QString transferName = QFileInfo(reply.value().value(QStringLiteral("Name")).toString()).fileName();
-            if (!transferName.isEmpty()) {
-                return transferName;
-            }
-        }
+    if (!m_receiveAgent) {
+        m_receiveAgent = new ObexReceiveAgent(this);
     }
 
-    const QString fallback = QFileInfo(transfer.path()).fileName();
-    return fallback.isEmpty() ? QStringLiteral("incoming-file") : fallback;
-}
-
-QString ObexAgent::uniqueDestinationFor(const QString &fileName) const
-{
-    const QDir downloadDir(obexRootPath());
-    const QFileInfo fileInfo(fileName);
-    const QString baseName = fileInfo.completeBaseName().isEmpty() ? fileName : fileInfo.completeBaseName();
-    const QString suffix = fileInfo.suffix();
-
-    QString candidate = downloadDir.filePath(fileName);
-    if (!QFileInfo::exists(candidate)) {
-        return candidate;
-    }
-
-    for (int counter = 1; counter < 10000; ++counter) {
-        const QString numberedName = suffix.isEmpty()
-            ? QStringLiteral("%1-%2").arg(baseName).arg(counter)
-            : QStringLiteral("%1-%2.%3").arg(baseName).arg(counter).arg(suffix);
-        candidate = downloadDir.filePath(numberedName);
-        if (!QFileInfo::exists(candidate)) {
-            return candidate;
-        }
-    }
-
-    return downloadDir.filePath(QStringLiteral("%1-%2").arg(fileName, QString::number(QDateTime::currentMSecsSinceEpoch())));
+    m_registerPending = true;
+    BluezQt::PendingCall *call = m_obexManager->registerAgent(m_receiveAgent);
+    connect(call, &BluezQt::PendingCall::finished, this, &ObexAgent::handleRegisterAgentFinished);
 }
 
 #include "moc_obexagent.cpp"
