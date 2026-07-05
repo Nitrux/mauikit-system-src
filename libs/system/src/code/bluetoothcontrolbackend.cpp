@@ -7,13 +7,56 @@
 #include <BluezQt/PendingCall>
 
 #include <QCoreApplication>
-#include <QSet>
 #include <QLoggingCategory>
+#include <QMetaObject>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QSet>
+#include <QThread>
+
+#include <type_traits>
+#include <utility>
 
 Q_LOGGING_CATEGORY(MAUI_BT_CONTROL, "org.mauikit.system.control.bluetooth")
 
 namespace MauiKitSystem
 {
+namespace
+{
+template<typename Func>
+auto invokeOnBackendThread(BluetoothControlBackend *backend, Func &&func)
+    -> std::invoke_result_t<Func>
+{
+    using ReturnType = std::invoke_result_t<Func>;
+
+    if (QThread::currentThread() == backend->thread())
+    {
+        if constexpr (std::is_void_v<ReturnType>)
+        {
+            func();
+            return;
+        }
+        else
+        {
+            return func();
+        }
+    }
+
+    if constexpr (std::is_void_v<ReturnType>)
+    {
+        QMetaObject::invokeMethod(backend, std::forward<Func>(func), Qt::BlockingQueuedConnection);
+    }
+    else
+    {
+        ReturnType result{};
+        QMetaObject::invokeMethod(backend, [&, func = std::forward<Func>(func)]() mutable {
+            result = func();
+        }, Qt::BlockingQueuedConnection);
+        return result;
+    }
+}
+}
+
 BluetoothControlBackend::BluetoothControlBackend(QObject *parent)
     : QObject(parent)
 {
@@ -21,7 +64,31 @@ BluetoothControlBackend::BluetoothControlBackend(QObject *parent)
 
 BluetoothControlBackend *BluetoothControlBackend::instance()
 {
-    static BluetoothControlBackend *backend = new BluetoothControlBackend(QCoreApplication::instance());
+    static QMutex mutex;
+    static BluetoothControlBackend *backend = nullptr;
+
+    QMutexLocker locker(&mutex);
+    if (backend)
+        return backend;
+
+    QCoreApplication *app = QCoreApplication::instance();
+    if (!app)
+    {
+        backend = new BluetoothControlBackend();
+        return backend;
+    }
+
+    if (QThread::currentThread() == app->thread())
+    {
+        backend = new BluetoothControlBackend(app);
+    }
+    else
+    {
+        QMetaObject::invokeMethod(app, [&]() {
+            backend = new BluetoothControlBackend(app);
+        }, Qt::BlockingQueuedConnection);
+    }
+
     return backend;
 }
 
@@ -43,78 +110,86 @@ void BluetoothControlBackend::ensureInitialized()
 
 bool BluetoothControlBackend::isAvailable()
 {
-    ensureInitialized();
-    return m_manager && !m_manager->adapters().isEmpty();
+    return invokeOnBackendThread(this, [this]() {
+        ensureInitialized();
+        return m_manager && !m_manager->adapters().isEmpty();
+    });
 }
 
 bool BluetoothControlBackend::isEnabled()
 {
-    ensureInitialized();
-    if (!m_manager) {
-        return false;
-    }
-
-    const auto adapters = m_manager->adapters();
-    for (const BluezQt::AdapterPtr &adapter : adapters) {
-        if (adapter && adapter->isPowered()) {
-            return true;
+    return invokeOnBackendThread(this, [this]() {
+        ensureInitialized();
+        if (!m_manager) {
+            return false;
         }
-    }
 
-    return false;
+        const auto adapters = m_manager->adapters();
+        for (const BluezQt::AdapterPtr &adapter : adapters) {
+            if (adapter && adapter->isPowered()) {
+                return true;
+            }
+        }
+
+        return false;
+    });
 }
 
 int BluetoothControlBackend::connectedDeviceCount()
 {
-    ensureInitialized();
-    if (!m_manager) {
-        return 0;
-    }
-
-    QSet<QString> connectedDevices;
-    const auto devices = m_manager->devices();
-    for (const BluezQt::DevicePtr &device : devices) {
-        if (!device || !device->isConnected()) {
-            continue;
+    return invokeOnBackendThread(this, [this]() {
+        ensureInitialized();
+        if (!m_manager) {
+            return 0;
         }
 
-        const QString key = device->address().isEmpty() ? device->ubi() : device->address();
-        connectedDevices.insert(key);
-    }
+        QSet<QString> connectedDevices;
+        const auto devices = m_manager->devices();
+        for (const BluezQt::DevicePtr &device : devices) {
+            if (!device || !device->isConnected()) {
+                continue;
+            }
 
-    return connectedDevices.size();
+            const QString key = device->address().isEmpty() ? device->ubi() : device->address();
+            connectedDevices.insert(key);
+        }
+
+        return connectedDevices.size();
+    });
 }
 
 bool BluetoothControlBackend::setEnabled(bool enabled)
 {
-    ensureInitialized();
-    if (!m_manager) {
-        return false;
-    }
-
-    const auto adapters = m_manager->adapters();
-    bool anyAdapter = false;
-    bool allSucceeded = true;
-
-    for (const BluezQt::AdapterPtr &adapter : adapters) {
-        if (!adapter) {
-            continue;
+    return invokeOnBackendThread(this, [this, enabled]() {
+        ensureInitialized();
+        if (!m_manager) {
+            return false;
         }
 
-        anyAdapter = true;
-        BluezQt::PendingCall *call = adapter->setPowered(enabled);
-        if (!call) {
-            allSucceeded = false;
-            continue;
+        const auto adapters = m_manager->adapters();
+        bool anyAdapter = false;
+        bool allSucceeded = true;
+
+        for (const BluezQt::AdapterPtr &adapter : adapters) {
+            if (!adapter) {
+                continue;
+            }
+
+            anyAdapter = true;
+            BluezQt::PendingCall *call = adapter->setPowered(enabled);
+            if (!call) {
+                allSucceeded = false;
+                continue;
+            }
+
+            call->waitForFinished();
+            if (call->error() != BluezQt::PendingCall::NoError) {
+                qCWarning(MAUI_BT_CONTROL) << "Failed to set adapter powered state:" << call->errorText();
+                allSucceeded = false;
+            }
         }
 
-        call->waitForFinished();
-        if (call->error() != BluezQt::PendingCall::NoError) {
-            qCWarning(MAUI_BT_CONTROL) << "Failed to set adapter powered state:" << call->errorText();
-            allSucceeded = false;
-        }
-    }
-
-    return anyAdapter && allSucceeded;
+        return anyAdapter && allSucceeded;
+    });
 }
 }
