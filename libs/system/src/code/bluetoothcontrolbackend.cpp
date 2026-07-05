@@ -126,7 +126,20 @@ bool BluetoothControlBackend::isEnabled()
 
         const auto adapters = m_manager->adapters();
         for (const BluezQt::AdapterPtr &adapter : adapters) {
-            if (adapter && adapter->isPowered()) {
+            if (!adapter) {
+                continue;
+            }
+
+            bool powered = false;
+            if (QThread::currentThread() == adapter->thread()) {
+                powered = adapter->isPowered();
+            } else {
+                QMetaObject::invokeMethod(adapter.data(), [adapter, &powered]() {
+                    powered = adapter->isPowered();
+                }, Qt::BlockingQueuedConnection);
+            }
+
+            if (powered) {
                 return true;
             }
         }
@@ -146,15 +159,38 @@ int BluetoothControlBackend::connectedDeviceCount()
         QSet<QString> connectedDevices;
         const auto devices = m_manager->devices();
         for (const BluezQt::DevicePtr &device : devices) {
-            if (!device || !device->isConnected()) {
+            if (!device) {
                 continue;
             }
 
-            const QString key = device->address().isEmpty() ? device->ubi() : device->address();
+            bool connected = false;
+            if (QThread::currentThread() == device->thread()) {
+                connected = device->isConnected();
+            } else {
+                QMetaObject::invokeMethod(device.data(), [device, &connected]() {
+                    connected = device->isConnected();
+                }, Qt::BlockingQueuedConnection);
+            }
+
+            if (!connected) {
+                continue;
+            }
+
+            QString key;
+            if (QThread::currentThread() == device->thread()) {
+                const QString address = device->address();
+                key = address.isEmpty() ? device->ubi() : address;
+            } else {
+                QMetaObject::invokeMethod(device.data(), [device, &key]() {
+                    const QString address = device->address();
+                    key = address.isEmpty() ? device->ubi() : address;
+                }, Qt::BlockingQueuedConnection);
+            }
+
             connectedDevices.insert(key);
         }
 
-        return connectedDevices.size();
+        return static_cast<int>(connectedDevices.size());
     });
 }
 
@@ -176,15 +212,35 @@ bool BluetoothControlBackend::setEnabled(bool enabled)
             }
 
             anyAdapter = true;
-            BluezQt::PendingCall *call = adapter->setPowered(enabled);
-            if (!call) {
-                allSucceeded = false;
-                continue;
+            bool adapterSucceeded = false;
+            if (QThread::currentThread() == adapter->thread()) {
+                BluezQt::PendingCall *call = adapter->setPowered(enabled);
+                if (call) {
+                    call->waitForFinished();
+                    if (call->error() != BluezQt::PendingCall::NoError) {
+                        qCWarning(MAUI_BT_CONTROL) << "Failed to set adapter powered state:" << call->errorText();
+                    } else {
+                        adapterSucceeded = true;
+                    }
+                }
+            } else {
+                QMetaObject::invokeMethod(adapter.data(), [adapter, enabled, &adapterSucceeded]() {
+                    BluezQt::PendingCall *call = adapter->setPowered(enabled);
+                    if (!call) {
+                        return;
+                    }
+
+                    call->waitForFinished();
+                    if (call->error() != BluezQt::PendingCall::NoError) {
+                        qCWarning(MAUI_BT_CONTROL) << "Failed to set adapter powered state:" << call->errorText();
+                        return;
+                    }
+
+                    adapterSucceeded = true;
+                }, Qt::BlockingQueuedConnection);
             }
 
-            call->waitForFinished();
-            if (call->error() != BluezQt::PendingCall::NoError) {
-                qCWarning(MAUI_BT_CONTROL) << "Failed to set adapter powered state:" << call->errorText();
+            if (!adapterSucceeded) {
                 allSucceeded = false;
             }
         }
