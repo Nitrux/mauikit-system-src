@@ -40,6 +40,7 @@ CONTROL_EXPORT bool currentControlCenterVolumeState(QString *percentText, bool *
 CONTROL_EXPORT bool setControlCenterVolumePercent(int percent);
 CONTROL_EXPORT bool currentControlCenterBrightnessPercent(QString *percentText);
 CONTROL_EXPORT bool setControlCenterBrightnessPercent(int percent);
+CONTROL_EXPORT bool controlCenterNightLightState(bool *enabled);
 CONTROL_EXPORT bool controlCenterNightLightAvailable();
 CONTROL_EXPORT bool controlCenterNightLightRunning();
 CONTROL_EXPORT bool startControlCenterNightLight();

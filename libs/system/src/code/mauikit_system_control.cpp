@@ -647,24 +647,57 @@ bool setControlCenterBrightnessPercent(int percent)
     return runCommandText(QStringLiteral("brightnessctl"), QStringList { QStringLiteral("set"), percentText, QStringLiteral("--quiet") }, nullptr, 1200);
 }
 
+bool controlCenterNightLightState(bool *enabled)
+{
+    if (enabled)
+        *enabled = false;
+
+    QString identity;
+    if (!runCommandText(QStringLiteral("hyprctl"),
+                        QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("get") },
+                        &identity,
+                        750))
+    {
+        return false;
+    }
+
+    const QString normalizedIdentity = identity.trimmed().toLower();
+    if (normalizedIdentity != QLatin1String("true")
+        && normalizedIdentity != QLatin1String("false"))
+    {
+        return false;
+    }
+
+    if (enabled)
+        *enabled = normalizedIdentity == QLatin1String("false");
+    return true;
+}
+
 bool controlCenterNightLightAvailable()
 {
-    return commandAvailable(QStringLiteral("hyprsunset"));
+    return controlCenterNightLightState(nullptr);
 }
 
 bool controlCenterNightLightRunning()
 {
-    return processRunning(QStringLiteral("hyprsunset"));
+    bool enabled = false;
+    return controlCenterNightLightState(&enabled) && enabled;
 }
 
 bool startControlCenterNightLight()
 {
-    return QProcess::startDetached(QStringLiteral("hyprsunset"));
+    return runCommandText(QStringLiteral("hyprctl"),
+                          QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("false") },
+                          nullptr,
+                          750);
 }
 
 bool stopControlCenterNightLight()
 {
-    return stopProcessByName(QStringLiteral("hyprsunset"));
+    return runCommandText(QStringLiteral("hyprctl"),
+                          QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("true") },
+                          nullptr,
+                          750);
 }
 
 bool executeControlCenterPowerCommand(const QString &command)
