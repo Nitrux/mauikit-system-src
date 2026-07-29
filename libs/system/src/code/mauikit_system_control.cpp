@@ -652,20 +652,31 @@ bool controlCenterNightLightState(bool *enabled)
     if (enabled)
         *enabled = false;
 
+    if (!commandAvailable(QStringLiteral("hyprsunset")))
+        return false;
+
+    const bool running = processRunning(QStringLiteral("hyprsunset"));
+    if (!running)
+        return true;
+
     QString identity;
     if (!runCommandText(QStringLiteral("hyprctl"),
                         QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("get") },
                         &identity,
                         750))
     {
-        return false;
+        if (enabled)
+            *enabled = true;
+        return true;
     }
 
     const QString normalizedIdentity = identity.trimmed().toLower();
     if (normalizedIdentity != QLatin1String("true")
         && normalizedIdentity != QLatin1String("false"))
     {
-        return false;
+        if (enabled)
+            *enabled = true;
+        return true;
     }
 
     if (enabled)
@@ -686,6 +697,12 @@ bool controlCenterNightLightRunning()
 
 bool startControlCenterNightLight()
 {
+    if (!commandAvailable(QStringLiteral("hyprsunset")))
+        return false;
+
+    if (!processRunning(QStringLiteral("hyprsunset")))
+        return QProcess::startDetached(QStringLiteral("hyprsunset"));
+
     return runCommandText(QStringLiteral("hyprctl"),
                           QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("false") },
                           nullptr,
@@ -694,6 +711,9 @@ bool startControlCenterNightLight()
 
 bool stopControlCenterNightLight()
 {
+    if (!processRunning(QStringLiteral("hyprsunset")))
+        return true;
+
     return runCommandText(QStringLiteral("hyprctl"),
                           QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("true") },
                           nullptr,
