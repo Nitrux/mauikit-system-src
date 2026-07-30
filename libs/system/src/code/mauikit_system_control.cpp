@@ -655,32 +655,8 @@ bool controlCenterNightLightState(bool *enabled)
     if (!commandAvailable(QStringLiteral("hyprsunset")))
         return false;
 
-    const bool running = processRunning(QStringLiteral("hyprsunset"));
-    if (!running)
-        return true;
-
-    QString identity;
-    if (!runCommandText(QStringLiteral("hyprctl"),
-                        QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("get") },
-                        &identity,
-                        750))
-    {
-        if (enabled)
-            *enabled = true;
-        return true;
-    }
-
-    const QString normalizedIdentity = identity.trimmed().toLower();
-    if (normalizedIdentity != QLatin1String("true")
-        && normalizedIdentity != QLatin1String("false"))
-    {
-        if (enabled)
-            *enabled = true;
-        return true;
-    }
-
     if (enabled)
-        *enabled = normalizedIdentity == QLatin1String("false");
+        *enabled = processRunning(QStringLiteral("hyprsunset"));
     return true;
 }
 
@@ -700,13 +676,10 @@ bool startControlCenterNightLight()
     if (!commandAvailable(QStringLiteral("hyprsunset")))
         return false;
 
-    if (!processRunning(QStringLiteral("hyprsunset")))
-        return QProcess::startDetached(QStringLiteral("hyprsunset"));
+    if (processRunning(QStringLiteral("hyprsunset")))
+        return true;
 
-    return runCommandText(QStringLiteral("hyprctl"),
-                          QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("false") },
-                          nullptr,
-                          750);
+    return QProcess::startDetached(QStringLiteral("hyprsunset"));
 }
 
 bool stopControlCenterNightLight()
@@ -714,10 +687,7 @@ bool stopControlCenterNightLight()
     if (!processRunning(QStringLiteral("hyprsunset")))
         return true;
 
-    return runCommandText(QStringLiteral("hyprctl"),
-                          QStringList { QStringLiteral("hyprsunset"), QStringLiteral("identity"), QStringLiteral("true") },
-                          nullptr,
-                          750);
+    return stopProcessByName(QStringLiteral("hyprsunset"));
 }
 
 bool executeControlCenterPowerCommand(const QString &command)
