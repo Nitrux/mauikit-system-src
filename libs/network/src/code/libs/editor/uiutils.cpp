@@ -193,7 +193,7 @@ QString UiUtils::iconAndTitleForConnectionSettingsType(NetworkManager::Connectio
         break;
     case ConnectionSettings::Bluetooth:
         text = i18n("Bluetooth");
-        icon = QStringLiteral("network-wireless-bluetooth-symbolic");
+        icon = QStringLiteral("media-bluetooth");
         break;
     case ConnectionSettings::Bond:
         text = i18n("Bond");

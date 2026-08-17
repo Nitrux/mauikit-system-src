@@ -362,8 +362,8 @@ void ConnectionIcon::setIcons()
                     if (btDevice->bluetoothCapabilities().testFlag(NetworkManager::BluetoothDevice::Dun)) {
                         setModemIcon(device);
                     } else {
-                        setConnectionIcon(QStringLiteral("network-wireless-bluetooth-symbolic"));
-                        setConnectionTooltipIcon(QStringLiteral("network-wireless-bluetooth"));
+                        setConnectionIcon(QStringLiteral("media-bluetooth"));
+                        setConnectionTooltipIcon(QStringLiteral("media-bluetooth"));
                     }
                 }
             } else if (type == 29) { // TODO change to WireGuard enum value once it is added

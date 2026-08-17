@@ -211,7 +211,7 @@ QString NetworkModelItem::computeIcon() const
         return QStringLiteral("network-mobile-100");
         break;
     case NetworkManager::ConnectionSettings::Bluetooth:
-        return QStringLiteral("network-wireless-bluetooth-symbolic");
+        return QStringLiteral("media-bluetooth");
         break;
     case NetworkManager::ConnectionSettings::Bond:
         break;
