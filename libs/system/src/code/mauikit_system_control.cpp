@@ -695,8 +695,8 @@ bool executeControlCenterPowerCommand(const QString &command)
     if (QProcess::startDetached(QStringLiteral("/bin/sh"), QStringList { QStringLiteral("-lc"), command }))
         return true;
 
-    if (command.compare(QStringLiteral("wlogout"), Qt::CaseInsensitive) != 0)
-        return QProcess::startDetached(QStringLiteral("/bin/sh"), QStringList { QStringLiteral("-lc"), QStringLiteral("wlogout") });
+    if (command.compare(QStringLiteral("qmlogout"), Qt::CaseInsensitive) != 0)
+        return QProcess::startDetached(QStringLiteral("/bin/sh"), QStringList { QStringLiteral("-lc"), QStringLiteral("qmlogout") });
 
     return false;
 }
