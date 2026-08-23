@@ -5,6 +5,12 @@
 #include <QVariantMap>
 #include "power_export.h"
 
+/**
+ * @brief Exposes the available system power profiles and the active profile.
+ *
+ * It also reports applications holding or limiting performance mode and can
+ * request a profile change with changeProfile().
+ */
 class POWER_EXPORT PowerProfile : public QObject
 {
     Q_OBJECT

@@ -2,6 +2,13 @@ import org.mauikit.system.audio 1.0 as MauiSystem
 
 MauiSystem.SortFilterModel
 {
+    /**
+     * @brief Base proxy model for filtering MauiKit System audio objects.
+     *
+     * filters describes role/value pairs for consumers that provide a filter
+     * callback. filterOutInactiveDevices indicates whether unavailable audio
+     * devices should be excluded by such a callback.
+     */
     property var filters: []
     property bool filterOutInactiveDevices: false
 

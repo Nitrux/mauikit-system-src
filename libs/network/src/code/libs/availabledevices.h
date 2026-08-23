@@ -13,6 +13,9 @@
 
 #include <NetworkManagerQt/Device>
 
+/**
+ * @brief Reports which kinds of NetworkManager devices are currently available.
+ */
 class AvailableDevices : public QObject
 {
     Q_OBJECT

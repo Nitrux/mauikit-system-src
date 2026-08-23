@@ -6,6 +6,7 @@
 #include <Solid/Battery>
 #include "power_export.h"
 
+/** @brief Exposes live charge, identity, timing, and threshold data for one battery. */
 class POWER_EXPORT Battery : public QObject
 {
     Q_OBJECT
@@ -121,6 +122,7 @@ private:
     qulonglong m_timeToFull;
 };
 
+/** @brief Provides the batteries detected on the system as a list model. */
 class POWER_EXPORT BatteryModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -148,6 +150,7 @@ private:
     QVector<Battery*>m_batteries;
 };
 
+/** @brief Tracks system batteries, the primary battery, and AC power state. */
 class POWER_EXPORT BatteryInfo : public QObject
 {
     Q_OBJECT

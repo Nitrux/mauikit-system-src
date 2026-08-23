@@ -6,6 +6,12 @@
 #include <QSortFilterProxyModel>
 #include <QVector>
 
+/**
+ * @brief Makes sorting and filtering a QAbstractItemModel convenient from QML.
+ *
+ * Filtering can use a string, a regular expression, or a JavaScript callback.
+ * Source and proxy row indexes can be converted with the mapping methods.
+ */
 class SortFilterModel : public QSortFilterProxyModel
 {
     Q_OBJECT

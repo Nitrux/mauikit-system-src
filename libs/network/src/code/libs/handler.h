@@ -26,6 +26,12 @@
 
 #include <QCoroCore>
 
+/**
+ * @brief Performs network connection, radio, scan, and hotspot operations.
+ *
+ * Methods taking connection or device strings expect NetworkManager D-Bus
+ * object paths unless their documentation states otherwise.
+ */
 class MAUIKITSYSTEMNETWORK_EXPORT Handler : public QObject
 {
     Q_OBJECT

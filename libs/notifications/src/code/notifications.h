@@ -29,6 +29,11 @@
 
 class NotificationServer;
 
+/**
+ * @brief Owns the notification server and exposes its live notification model.
+ *
+ * The object becomes active after its QML component has completed.
+ */
 class Notifications : public QObject, public QQmlParserStatus
 {
     Q_OBJECT

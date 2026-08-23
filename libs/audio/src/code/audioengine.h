@@ -15,6 +15,7 @@ class Source;
 class SinkInput;
 class SourceOutput;
 
+/** @brief Base list model exposing PipeWire audio objects through AudioObjectRole. */
 class AbstractModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -51,6 +52,7 @@ private:
     QHash<int, int> m_objectProperties;
 };
 
+/** @brief Lists the audio cards reported by PipeWire. */
 class CardModel : public AbstractModel
 {
     Q_OBJECT
@@ -58,6 +60,7 @@ public:
     explicit CardModel(QObject *parent = nullptr);
 };
 
+/** @brief Lists audio output devices and identifies the default and preferred sink. */
 class SinkModel : public AbstractModel
 {
     Q_OBJECT
@@ -83,6 +86,7 @@ private:
     Sink *m_preferredSink = nullptr;
 };
 
+/** @brief Lists application playback streams connected to audio sinks. */
 class SinkInputModel : public AbstractModel
 {
     Q_OBJECT
@@ -93,6 +97,7 @@ private:
     void rebuild();
 };
 
+/** @brief Lists audio input devices and identifies the default source. */
 class SourceModel : public AbstractModel
 {
     Q_OBJECT
@@ -114,6 +119,7 @@ private:
     void rebuild();
 };
 
+/** @brief Lists recording streams connected to audio sources. */
 class SourceOutputModel : public AbstractModel
 {
     Q_OBJECT
@@ -124,6 +130,7 @@ private:
     void rebuild();
 };
 
+/** @brief Lists persisted per-stream audio settings. */
 class StreamRestoreModel : public AbstractModel
 {
     Q_OBJECT
@@ -131,6 +138,7 @@ public:
     explicit StreamRestoreModel(QObject *parent = nullptr);
 };
 
+/** @brief Lists the audio modules reported by PipeWire. */
 class ModuleModel : public AbstractModel
 {
     Q_OBJECT

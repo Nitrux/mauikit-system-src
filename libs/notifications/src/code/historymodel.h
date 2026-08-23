@@ -22,6 +22,7 @@
 #include <QAbstractListModel>
 #include "notification.h"
 
+/** @brief Stores notification history and provides operations to remove or persist it. */
 class HistoryModel : public QAbstractListModel
 {
     Q_OBJECT

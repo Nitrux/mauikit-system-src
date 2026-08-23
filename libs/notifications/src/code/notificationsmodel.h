@@ -14,6 +14,12 @@
 class HistoryModel;
 class Notification;
 
+/**
+ * @brief Lists active desktop notifications received by the notification server.
+ *
+ * Notifications can be closed, expired, or have their default action invoked.
+ * The historyModel property provides notifications retained in history.
+ */
 class NotificationsModel : public QAbstractListModel
 {
     Q_OBJECT

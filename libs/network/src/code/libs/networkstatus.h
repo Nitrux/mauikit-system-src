@@ -14,6 +14,9 @@
 
 #include <NetworkManagerQt/Manager>
 
+/**
+ * @brief Summarizes active network connections and connectivity state.
+ */
 class NetworkStatus : public QObject
 {
     Q_OBJECT

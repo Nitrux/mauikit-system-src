@@ -2,6 +2,13 @@
 #include <QObject>
 #include "power_export.h"
 
+/**
+ * @brief Reports screen and keyboard brightness capabilities and values.
+ *
+ * Use changeScreenBrightness() and changeKeyboardBrightness() to request a
+ * new hardware brightness level. Values range from zero to the corresponding
+ * maximum brightness property.
+ */
 class POWER_EXPORT BrightnessControl : public QObject
 {
     Q_OBJECT

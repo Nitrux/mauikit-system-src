@@ -4,6 +4,11 @@
 
 namespace QPipeWireAudio
 {
+/**
+ * @brief Adds volume, mute, and per-channel controls to an audio object.
+ *
+ * The channels and channelVolumes lists use matching indexes.
+ */
 class VolumeObject : public AudioObject
 {
     Q_OBJECT
