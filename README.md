@@ -7,11 +7,11 @@ _Shared desktop-integration libraries for the MauiKit stack._
 This repository currently provides the following modules:
 
 
-- `system`: shared control-center/system helper APIs for desktop shells and other Maui apps
+- `system`: Shared control-center/system helper APIs for desktop shells and other MauiKit apps
 - `audio`: PipeWire/WirePlumber session integration and volume feedback
 - `network`: NetworkManager integration for connection management and status
 - `notifications`: Freedesktop notifications integration
-- `power`: power-management, battery, and brightness integration
+- `power`: Power management, battery, and brightness integration
 
 # Issues
 
