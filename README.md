@@ -2,7 +2,7 @@
 
 ![](https://mauikit.org/wp-content/uploads/2018/12/maui_project_logo.png)
 
-_Shared desktop-integration libraries for the Maui stack._
+_Shared desktop-integration libraries for the MauiKit stack._
 
 This repository currently provides the following modules:
 
