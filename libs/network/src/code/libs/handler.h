@@ -14,6 +14,7 @@
 #include <QMap>
 #include <QPointer>
 #include <QTimer>
+#include <functional>
 #include <memory>
 
 #include <qqmlregistration.h>
@@ -64,6 +65,8 @@ public:
     }
 
     void addConnection(NMConnection *connection);
+
+    bool canActivateConnection(const QString &connection) const;
 
 public Q_SLOTS:
     /**
@@ -157,8 +160,9 @@ private:
     SecretStorageMode storageModeForConnection(const QString &uuid) const;
     NMVariantMapMap applySecretsStorageMode(const QString &uuid, const NMVariantMapMap &map) const;
     void applySecretsStorageModeToConnection(const NetworkManager::Connection::Ptr &connection, SecretStorageMode storageMode);
+    void storeSecretsIfNeeded(const QString &uuid, const NMVariantMapMap &connection, std::function<void(bool, const QString &)> callback) const;
 
-    QCoro::Task<void> addAndActivateConnectionDBus(const NMVariantMapMap &map, const QString &device, const QString &specificObject);
+    void addAndActivateConnectionDBus(const NMVariantMapMap &map, const QString &device, const QString &specificObject);
     QCoro::Task<void> activateConnectionInternal(const QString &connection, const QString &device, const QString &specificParameter);
     QCoro::Task<void> addAndActivateConnectionInternal(const QString &device, const QString &specificParameter, const QString &password = QString());
     QCoro::Task<void> deactivateConnectionInternal(const QString &connection, const QString &device);
@@ -186,8 +190,9 @@ private:
     void decrementScansCount();
 
     QPointer<QDBusPendingCallWatcher> m_requestWifiCodeWatcher;
-    std::unique_ptr<class SecretsBackend> m_nmOwnedSecretsBackend;
-    std::unique_ptr<class SecretsBackend> m_keychainSecretsBackend;
+    std::unique_ptr<class NmOwnedBackend> m_nmOwnedSecretsBackend;
+    std::unique_ptr<class KeychainBackend> m_keychainSecretsBackend;
+    std::unique_ptr<class KeychainSecretAgent> m_keychainSecretAgent;
     QHash<QString, SecretStorageMode> m_connectionStorageModes;
 };
 

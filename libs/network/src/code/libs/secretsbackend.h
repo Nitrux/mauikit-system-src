@@ -8,10 +8,17 @@
 #define MAUIKIT_SYSTEM_NETWORK_SECRETS_BACKEND_H
 
 #include <NetworkManagerQt/Setting>
+#include <NetworkManagerQt/SecretAgent>
 #include <NetworkManagerQt/Utils>
+
+#include <QDBusMessage>
+#include <QDBusObjectPath>
+#include <QStringList>
 
 #include <functional>
 #include <QHash>
+#include <QSharedPointer>
+#include <QObject>
 #include <QString>
 
 class SecretsBackend
@@ -50,10 +57,12 @@ public:
     NetworkManager::Setting::SecretFlags storageFlags() const override;
 };
 
-class KeychainBackend final : public SecretsBackend
+class KeychainBackend final : public QObject, public SecretsBackend
 {
 public:
-    explicit KeychainBackend(bool secretServiceAvailable);
+    using BatchCallback = std::function<void(bool success, const QString &errorMessage)>;
+
+    explicit KeychainBackend(bool secretServiceAvailable, QObject *parent = nullptr);
 
     QString id() const override;
     bool available() const override;
@@ -62,10 +71,41 @@ public:
     void remove(const QString &uuid, const QString &setting, const QString &key, WriteCallback callback = {}) override;
     NetworkManager::Setting::SecretFlags storageFlags() const override;
 
+    void storeConnectionSecrets(const QString &uuid, const NMVariantMapMap &connection, BatchCallback callback = {});
+    void removeConnectionSecrets(const QString &uuid, BatchCallback callback = {});
+
 private:
     static QString keyForSecret(const QString &uuid, const QString &setting, const QString &key);
-    mutable QHash<QString, QString> m_secretCache;
     bool m_secretServiceAvailable = false;
+};
+
+class KeychainSecretAgent final : public NetworkManager::SecretAgent
+{
+    Q_OBJECT
+
+public:
+    explicit KeychainSecretAgent(KeychainBackend *backend, QObject *parent = nullptr);
+
+public Q_SLOTS:
+    void CancelGetSecrets(const QDBusObjectPath &connectionPath, const QString &settingName) override;
+    void DeleteSecrets(const NMVariantMapMap &connection, const QDBusObjectPath &connectionPath) override;
+    NMVariantMapMap GetSecrets(const NMVariantMapMap &connection,
+                                const QDBusObjectPath &connectionPath,
+                                const QString &settingName,
+                                const QStringList &hints,
+                                uint flags) override;
+    void SaveSecrets(const NMVariantMapMap &connection, const QDBusObjectPath &connectionPath) override;
+
+private:
+    struct PendingGetSecrets;
+
+    static QString requestId(const QDBusObjectPath &connectionPath, const QString &settingName);
+    static QString connectionUuid(const NMVariantMapMap &connection, const QDBusObjectPath &connectionPath);
+    void finishGetSecrets(const QSharedPointer<PendingGetSecrets> &request);
+    void sendReply(const QDBusMessage &message) const;
+
+    KeychainBackend *const m_backend;
+    QHash<QString, QSharedPointer<PendingGetSecrets>> m_pendingGetSecrets;
 };
 
 #endif // MAUIKIT_SYSTEM_NETWORK_SECRETS_BACKEND_H

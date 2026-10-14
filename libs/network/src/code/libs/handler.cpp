@@ -22,6 +22,7 @@
 #include <NetworkManagerQt/WirelessSetting>
 
 #include <libnm/nm-vpn-plugin-info.h>
+#include <glib-object.h>
 
 #include <ModemManagerQt/Manager>
 #include <ModemManagerQt/ModemDevice>
@@ -34,6 +35,7 @@
 #include <QFile>
 #include <QIcon>
 #include <QStringBuilder>
+#include <utility>
 
 #include <KIO/OpenUrlJob>
 #include <KLocalizedString>
@@ -83,6 +85,9 @@ Handler::Handler(QObject *parent)
 
     m_nmOwnedSecretsBackend = std::make_unique<NmOwnedBackend>();
     m_keychainSecretsBackend = std::make_unique<KeychainBackend>(secretServiceAvailable);
+    if (m_keychainSecretsBackend->available()) {
+        m_keychainSecretAgent = std::make_unique<KeychainSecretAgent>(m_keychainSecretsBackend.get(), this);
+    }
 
     if (!Configuration::self().hotspotConnectionPath().isEmpty()) {
         NetworkManager::ActiveConnection::Ptr hotspot = NetworkManager::findActiveConnection(Configuration::self().hotspotConnectionPath());
@@ -99,6 +104,31 @@ Handler::Handler(QObject *parent)
 }
 
 Handler::~Handler() = default;
+
+bool Handler::canActivateConnection(const QString &connection) const
+{
+    const NetworkManager::Connection::Ptr con = NetworkManager::findConnection(connection);
+    if (!con || !con->settings()) {
+        return false;
+    }
+
+    if (con->settings()->connectionType() != NetworkManager::ConnectionSettings::Vpn) {
+        return true;
+    }
+
+    const NetworkManager::VpnSetting::Ptr vpnSetting =
+        con->settings()->setting(NetworkManager::Setting::Vpn).staticCast<NetworkManager::VpnSetting>();
+    if (!vpnSetting || vpnSetting->serviceType().isEmpty()) {
+        return false;
+    }
+
+    GSList *networkManagerPlugins = nm_vpn_plugin_info_list_load();
+    const bool available = nm_vpn_plugin_info_list_find_by_service(networkManagerPlugins, vpnSetting->serviceType().toStdString().c_str()) != nullptr;
+    g_slist_free_full(networkManagerPlugins, [](gpointer data) {
+        g_object_unref(data);
+    });
+    return available;
+}
 
 void Handler::activateConnection(const QString &connection, const QString &device, const QString &specificObject)
 {
@@ -120,13 +150,7 @@ QCoro::Task<void> Handler::activateConnectionInternal(const QString &connection,
             qCDebug(MAUIKIT_SYSTEM_NETWORK_LOG) << "Checking VPN" << con->name() << "type:" << vpnSetting->serviceType();
             const QString pluginBaseName = vpnSetting->serviceType().remove(QLatin1String("org.freedesktop.NetworkManager."));
 
-            // Check missing NetworkManager VPN plugin
-            GSList *networkManagerPlugins = nullptr;
-            networkManagerPlugins = nm_vpn_plugin_info_list_load();
-
-            NMVpnPluginInfo *plugin_info = nm_vpn_plugin_info_list_find_by_service(networkManagerPlugins, vpnSetting->serviceType().toStdString().c_str());
-
-            if (!plugin_info) {
+            if (!canActivateConnection(connection)) {
                 qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "VPN" << vpnSetting->serviceType() << "not found, skipping";
                 auto notification = new KNotification(QStringLiteral("MissingVpnPlugin"), KNotification::Persistent, this);
                 notification->setComponentName(QStringLiteral("networkmanagement"));
@@ -335,23 +359,42 @@ QCoro::Task<void> Handler::addConnection(const NMVariantMapMap &map)
     const QString connectionUuid = map.value(QStringLiteral("connection")).value(QStringLiteral("uuid")).toString();
     const NMVariantMapMap effectiveMap = applySecretsStorageMode(connectionUuid, map);
 
-    QDBusReply<QDBusObjectPath> reply = co_await NetworkManager::addConnection(effectiveMap);
+    storeSecretsIfNeeded(connectionUuid, effectiveMap, [this, connectionId, connectionUuid, effectiveMap](bool success, const QString &errorMessage) {
+        if (!success) {
+            KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
+            notification->setTitle(i18n("Failed to add connection %1", connectionId));
+            notification->setComponentName(QStringLiteral("networkmanagement"));
+            notification->setText(errorMessage);
+            notification->setIconName(QStringLiteral("dialog-warning"));
+            notification->sendEvent();
+            return;
+        }
 
-    if (!reply.isValid()) {
-        KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
-        notification->setTitle(i18n("Failed to add connection %1", connectionId));
-        notification->setComponentName(QStringLiteral("networkmanagement"));
-        notification->setText(reply.error().message());
-        notification->setIconName(QStringLiteral("dialog-warning"));
-        notification->sendEvent();
-    } else {
-        KNotification *notification = new KNotification(QStringLiteral("ConnectionAdded"), KNotification::CloseOnTimeout, this);
-        notification->setText(i18n("Connection %1 has been added", connectionId));
-        notification->setComponentName(QStringLiteral("networkmanagement"));
-        notification->setTitle(connectionId);
-        notification->setIconName(QStringLiteral("dialog-information"));
-        notification->sendEvent();
-    }
+        auto *watcher = new QDBusPendingCallWatcher(NetworkManager::addConnection(effectiveMap), this);
+        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, connectionId, connectionUuid] {
+            const QDBusPendingReply<QDBusObjectPath> reply = *watcher;
+            if (!reply.isValid()) {
+                if (storageModeForConnection(connectionUuid) == KeychainStorage && m_keychainSecretsBackend) {
+                    m_keychainSecretsBackend->removeConnectionSecrets(connectionUuid);
+                }
+                KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
+                notification->setTitle(i18n("Failed to add connection %1", connectionId));
+                notification->setComponentName(QStringLiteral("networkmanagement"));
+                notification->setText(reply.error().message());
+                notification->setIconName(QStringLiteral("dialog-warning"));
+                notification->sendEvent();
+            } else {
+                KNotification *notification = new KNotification(QStringLiteral("ConnectionAdded"), KNotification::CloseOnTimeout, this);
+                notification->setText(i18n("Connection %1 has been added", connectionId));
+                notification->setComponentName(QStringLiteral("networkmanagement"));
+                notification->setTitle(connectionId);
+                notification->setIconName(QStringLiteral("dialog-information"));
+                notification->sendEvent();
+            }
+            watcher->deleteLater();
+        });
+    });
+    co_return;
 }
 
 struct AddConnectionData {
@@ -413,21 +456,40 @@ void Handler::addConnection(NMConnection *connection)
                               userData);
 }
 
-QCoro::Task<void> Handler::addAndActivateConnectionDBus(const NMVariantMapMap &map, const QString &device, const QString &specificObject)
+void Handler::addAndActivateConnectionDBus(const NMVariantMapMap &map, const QString &device, const QString &specificObject)
 {
     const QString name = map.value(QStringLiteral("connection")).value(QStringLiteral("id")).toString();
     const QString uuid = map.value(QStringLiteral("connection")).value(QStringLiteral("uuid")).toString();
     const NMVariantMapMap effectiveMap = applySecretsStorageMode(uuid, map);
-    QDBusReply<QDBusObjectPath> reply = co_await NetworkManager::addAndActivateConnection(effectiveMap, device, specificObject);
 
-    if (!reply.isValid()) {
-        KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
-        notification->setTitle(i18n("Failed to add %1", name));
-        notification->setComponentName(QStringLiteral("networkmanagement"));
-        notification->setText(reply.error().message());
-        notification->setIconName(QStringLiteral("dialog-warning"));
-        notification->sendEvent();
-    }
+    storeSecretsIfNeeded(uuid, effectiveMap, [this, name, uuid, device, specificObject, effectiveMap](bool success, const QString &errorMessage) {
+        if (!success) {
+            KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
+            notification->setTitle(i18n("Failed to add %1", name));
+            notification->setComponentName(QStringLiteral("networkmanagement"));
+            notification->setText(errorMessage);
+            notification->setIconName(QStringLiteral("dialog-warning"));
+            notification->sendEvent();
+            return;
+        }
+
+        auto *watcher = new QDBusPendingCallWatcher(NetworkManager::addAndActivateConnection(effectiveMap, device, specificObject), this);
+        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, name, uuid] {
+            const QDBusPendingReply<QDBusObjectPath> reply = *watcher;
+            if (!reply.isValid()) {
+                if (storageModeForConnection(uuid) == KeychainStorage && m_keychainSecretsBackend) {
+                    m_keychainSecretsBackend->removeConnectionSecrets(uuid);
+                }
+                KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
+                notification->setTitle(i18n("Failed to add %1", name));
+                notification->setComponentName(QStringLiteral("networkmanagement"));
+                notification->setText(reply.error().message());
+                notification->setIconName(QStringLiteral("dialog-warning"));
+                notification->sendEvent();
+            }
+            watcher->deleteLater();
+        });
+    });
 }
 
 void Handler::deactivateConnection(const QString &connection, const QString &device)
@@ -591,6 +653,7 @@ QCoro::Task<void> Handler::removeConnectionInternal(const QString &connection)
         }
     }
 
+    const QString connectionUuid = con->uuid();
     QDBusReply<void> reply = co_await con->remove();
 
     if (!reply.isValid()) {
@@ -601,6 +664,9 @@ QCoro::Task<void> Handler::removeConnectionInternal(const QString &connection)
         notification->setIconName(QStringLiteral("dialog-warning"));
         notification->sendEvent();
     } else {
+        if (storageModeForConnection(connectionUuid) == KeychainStorage && m_keychainSecretsBackend) {
+            m_keychainSecretsBackend->removeConnectionSecrets(connectionUuid);
+        }
         KNotification *notification = new KNotification(QStringLiteral("ConnectionRemoved"), KNotification::CloseOnTimeout, this);
         notification->setText(i18n("Connection %1 has been removed", con->name()));
         notification->setComponentName(QStringLiteral("networkmanagement"));
@@ -612,24 +678,39 @@ QCoro::Task<void> Handler::removeConnectionInternal(const QString &connection)
 
 QCoro::Task<void> Handler::updateConnection(NetworkManager::Connection::Ptr connection, const NMVariantMapMap &map)
 {
-    const NMVariantMapMap effectiveMap = applySecretsStorageMode(connection ? connection->uuid() : QString(), map);
-    QDBusReply<void> reply = co_await connection->update(effectiveMap);
-
-    if (!reply.isValid()) {
-        KNotification *notification = new KNotification(QStringLiteral("FailedToUpdateConnection"), KNotification::CloseOnTimeout, this);
-        notification->setTitle(i18n("Failed to update connection %1", connection->name()));
-        notification->setComponentName(QStringLiteral("networkmanagement"));
-        notification->setText(reply.error().message());
-        notification->setIconName(QStringLiteral("dialog-warning"));
-        notification->sendEvent();
-    } else {
-        KNotification *notification = new KNotification(QStringLiteral("ConnectionUpdated"), KNotification::CloseOnTimeout, this);
-        notification->setText(i18n("Connection %1 has been updated", connection->name()));
-        notification->setComponentName(QStringLiteral("networkmanagement"));
-        notification->setTitle(connection->name());
-        notification->setIconName(QStringLiteral("dialog-information"));
-        notification->sendEvent();
+    if (!connection) {
+        co_return;
     }
+
+    const QString connectionUuid = connection->uuid();
+    const QString connectionName = connection->name();
+    const NMVariantMapMap effectiveMap = applySecretsStorageMode(connectionUuid, map);
+    storeSecretsIfNeeded(connectionUuid, effectiveMap, [this, connection, connectionName, effectiveMap](bool success, const QString &errorMessage) {
+        if (!success) {
+            KNotification *notification = new KNotification(QStringLiteral("FailedToUpdateConnection"), KNotification::CloseOnTimeout, this);
+            notification->setTitle(i18n("Failed to update connection %1", connectionName));
+            notification->setComponentName(QStringLiteral("networkmanagement"));
+            notification->setText(errorMessage);
+            notification->setIconName(QStringLiteral("dialog-warning"));
+            notification->sendEvent();
+            return;
+        }
+
+        auto *watcher = new QDBusPendingCallWatcher(connection->update(effectiveMap), this);
+        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, connectionName] {
+            const QDBusPendingReply<void> reply = *watcher;
+            if (!reply.isValid()) {
+                KNotification *notification = new KNotification(QStringLiteral("FailedToUpdateConnection"), KNotification::CloseOnTimeout, this);
+                notification->setTitle(i18n("Failed to update connection %1", connectionName));
+                notification->setComponentName(QStringLiteral("networkmanagement"));
+                notification->setText(reply.error().message());
+                notification->setIconName(QStringLiteral("dialog-warning"));
+                notification->sendEvent();
+            }
+            watcher->deleteLater();
+        });
+    });
+    co_return;
 }
 
 void Handler::requestScan(const QString &interface)
@@ -777,14 +858,14 @@ QCoro::Task<void> Handler::createHotspotInternal()
             // Use WPA2
             wifiSecurity->setKeyMgmt(NetworkManager::WirelessSecuritySetting::WpaPsk);
             wifiSecurity->setPsk(Configuration::self().hotspotPassword());
-            wifiSecurity->setPskFlags(NetworkManager::Setting::AgentOwned);
+            wifiSecurity->setPskFlags(NetworkManager::Setting::NotSaved);
         } else {
             // Use WEP
             wifiSecurity->setKeyMgmt(NetworkManager::WirelessSecuritySetting::Wep);
             wifiSecurity->setWepKeyType(NetworkManager::WirelessSecuritySetting::Passphrase);
             wifiSecurity->setWepTxKeyindex(0);
             wifiSecurity->setWepKey0(Configuration::self().hotspotPassword());
-            wifiSecurity->setWepKeyFlags(NetworkManager::Setting::AgentOwned);
+            wifiSecurity->setWepKeyFlags(NetworkManager::Setting::NotSaved);
             wifiSecurity->setAuthAlg(NetworkManager::WirelessSecuritySetting::Open);
         }
     }
@@ -866,12 +947,16 @@ bool Handler::setSecretStorage(const QString &uuid, int storageMode)
         return false;
     }
 
+    const SecretStorageMode previousMode = storageModeForConnection(uuid);
     const SecretStorageMode mode = modeFromInt(storageMode);
+    SecretStorageMode selectedMode = mode;
     if (mode == KeychainStorage && (!m_keychainSecretsBackend || !m_keychainSecretsBackend->available())) {
         qCWarning(MAUIKIT_SYSTEM_NETWORK_LOG) << "Keychain backend requested but unavailable, keeping NM-owned storage for" << uuid;
-        m_connectionStorageModes.insert(uuid, NmOwnedStorage);
-    } else {
-        m_connectionStorageModes.insert(uuid, mode);
+        selectedMode = NmOwnedStorage;
+    }
+    m_connectionStorageModes.insert(uuid, selectedMode);
+    if (previousMode == KeychainStorage && selectedMode == NmOwnedStorage && m_keychainSecretsBackend) {
+        m_keychainSecretsBackend->removeConnectionSecrets(uuid);
     }
 
     for (const NetworkManager::Connection::Ptr &connection : NetworkManager::listConnections()) {
@@ -884,6 +969,18 @@ bool Handler::setSecretStorage(const QString &uuid, int storageMode)
     return true;
 }
 
+void Handler::storeSecretsIfNeeded(const QString &uuid, const NMVariantMapMap &connection, std::function<void(bool, const QString &)> callback) const
+{
+    if (storageModeForConnection(uuid) == KeychainStorage && m_keychainSecretsBackend) {
+        m_keychainSecretsBackend->storeConnectionSecrets(uuid, connection, std::move(callback));
+        return;
+    }
+
+    if (callback) {
+        callback(true, QString());
+    }
+}
+
 Handler::SecretStorageMode Handler::storageModeForConnection(const QString &uuid) const
 {
     if (!uuid.isEmpty() && m_connectionStorageModes.contains(uuid)) {
@@ -891,7 +988,7 @@ Handler::SecretStorageMode Handler::storageModeForConnection(const QString &uuid
     }
 
 #if MAUIKIT_SYSTEM_NETWORK_USE_KEYCHAIN
-    if (m_keychainSecretsBackend && m_keychainSecretsBackend->available()) {
+    if (m_keychainSecretAgent && m_keychainSecretsBackend && m_keychainSecretsBackend->available()) {
         return KeychainStorage;
     }
 #endif

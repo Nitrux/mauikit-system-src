@@ -4,6 +4,7 @@ add_definitions(-DTRANSLATION_DOMAIN=\"mauikitsystem-network\")
 
 
 add_library(MauiKitSystemNetwork SHARED)
+add_library(MauiKitSystem::Network ALIAS MauiKitSystemNetwork)
 generate_export_header(MauiKitSystemNetwork)
 
 ecm_qt_declare_logging_category(MauiKitSystemNetwork HEADER mauikitsystemnetwork_logging.h IDENTIFIER MAUIKIT_SYSTEM_NETWORK_LOG CATEGORY_NAME org.mauikit.system.network DESCRIPTION "MauiKitSystem Network" EXPORT MAUIKITSYSTEMNETWORK)
@@ -50,17 +51,19 @@ target_sources(MauiKitSystemNetwork PRIVATE
 
 target_include_directories(MauiKitSystemNetwork
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/editor
-        ${CMAKE_CURRENT_SOURCE_DIR}/models
-        ${CMAKE_CURRENT_BINARY_DIR})
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR};${CMAKE_CURRENT_SOURCE_DIR}/editor;${CMAKE_CURRENT_SOURCE_DIR}/models;${CMAKE_CURRENT_BINARY_DIR}>"
+        "$<INSTALL_INTERFACE:${KDE_INSTALL_INCLUDEDIR}/Maui/Core/Network>"
+)
 
 target_link_libraries(MauiKitSystemNetwork
 PUBLIC
+    Qt6::Core
+    Qt6::DBus
+    Qt6::Qml
     KF6::NetworkManagerQt
     PkgConfig::NETWORKMANAGER
     QCoro::Core
 PRIVATE
-    Qt6::Qml
     KF6::I18n
     KF6::Notifications
     KF6::KIOGui
@@ -78,4 +81,14 @@ endif()
 ecm_add_qml_module(MauiKitSystemNetwork URI org.mauikit.system.network GENERATE_PLUGIN_SOURCE)
 ecm_finalize_qml_module(MauiKitSystemNetwork)
 
-install(TARGETS MauiKitSystemNetwork ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+set_target_properties(MauiKitSystemNetwork PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+    EXPORT_NAME Network)
+
+install(TARGETS MauiKitSystemNetwork EXPORT MauiKitSystemNetworkTargets ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+install(FILES
+    handler.h
+    ${CMAKE_CURRENT_BINARY_DIR}/mauikitsystemnetwork_export.h
+    DESTINATION ${KDE_INSTALL_INCLUDEDIR}/Maui/Core/Network
+    COMPONENT Devel)
