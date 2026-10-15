@@ -27,9 +27,14 @@ bool DevicesProxyModel::hideBlockedDevices() const
 void DevicesProxyModel::setHideBlockedDevices(bool shouldHide)
 {
     if (m_hideBlockedDevices != shouldHide) {
+        #if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+        beginFilterChange();
         m_hideBlockedDevices = shouldHide;
-
+        endFilterChange();
+        #else
+        m_hideBlockedDevices = shouldHide;
         invalidateFilter();
+        #endif
 
         Q_EMIT hideBlockedDevicesChanged();
     }
@@ -119,5 +124,3 @@ bool DevicesProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sour
     // Only show paired and connected devices in the KCM and applet
     return index.data(BluezQt::DevicesModel::PairedRole).toBool() || index.data(BluezQt::DevicesModel::ConnectedRole).toBool();
 }
-
-#include "moc_devicesproxymodel.cpp"

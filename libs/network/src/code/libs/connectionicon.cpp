@@ -617,5 +617,3 @@ void ConnectionIcon::setVpn(bool vpn)
         Q_EMIT connectionIconChanged(connectionIcon());
     }
 }
-
-#include "moc_connectionicon.cpp"

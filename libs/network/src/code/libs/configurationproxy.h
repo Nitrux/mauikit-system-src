@@ -13,7 +13,7 @@
 #include <QObject>
 #include <QPointer>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class MAUIKITSYSTEMNETWORK_EXPORT ConfigurationProxy : public QObject
 {

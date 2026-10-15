@@ -100,5 +100,3 @@ QModelIndex KcmIdentityModel::mapToSource(const QModelIndex &proxyIndex) const
 
     return QIdentityProxyModel::mapToSource(proxyIndex);
 }
-
-#include "moc_kcmidentitymodel.cpp"

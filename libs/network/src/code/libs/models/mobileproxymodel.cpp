@@ -117,5 +117,3 @@ bool MobileProxyModel::lessThan(const QModelIndex &left, const QModelIndex &righ
         return false;
     }
 }
-
-#include "moc_mobileproxymodel.cpp"

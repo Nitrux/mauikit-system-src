@@ -23,5 +23,3 @@ QString Utils::adapterHciString(const QString &ubi)
     }
     return ubi.mid(startIndex, endIndex - startIndex);
 }
-
-#include "moc_utils.cpp"

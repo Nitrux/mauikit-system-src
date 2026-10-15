@@ -234,5 +234,3 @@ QString LaunchApp::deviceAddressFromUbi(const QString &ubi)
     address.replace(QLatin1Char('_'), QLatin1Char(':'));
     return address;
 }
-
-#include "moc_launchapp.cpp"

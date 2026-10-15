@@ -13,7 +13,7 @@
 
 #include <QSortFilterProxyModel>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class MAUIKITSYSTEMNETWORK_EXPORT MobileProxyModel : public QSortFilterProxyModel
 {

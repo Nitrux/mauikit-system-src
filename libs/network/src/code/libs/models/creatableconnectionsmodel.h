@@ -12,7 +12,7 @@
 #include <NetworkManagerQt/ConnectionSettings>
 #include <QAbstractListModel>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class MAUIKITSYSTEMNETWORK_EXPORT CreatableConnectionItem : public QObject
 {

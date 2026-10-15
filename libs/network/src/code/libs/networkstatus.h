@@ -10,7 +10,7 @@
 #include <QObject>
 #include <QUrl>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 #include <NetworkManagerQt/Manager>
 

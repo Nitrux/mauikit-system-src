@@ -262,5 +262,3 @@ QString NetworkStatus::checkUnknownReason() const
 
     return i18nc("global connection state", "Unknown");
 }
-
-#include "moc_networkstatus.cpp"

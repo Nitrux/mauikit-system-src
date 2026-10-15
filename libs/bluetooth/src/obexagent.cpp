@@ -352,5 +352,3 @@ void ObexAgent::registerAgent()
     BluezQt::PendingCall *call = m_obexManager->registerAgent(m_receiveAgent);
     connect(call, &BluezQt::PendingCall::finished, this, &ObexAgent::handleRegisterAgentFinished);
 }
-
-#include "moc_obexagent.cpp"

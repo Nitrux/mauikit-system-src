@@ -22,7 +22,11 @@ private:
 #ifdef QUICK_COMPILER
         return QStringLiteral("qrc:/qt/qml/org/mauikit/system/audio/") + filePath;
 #else
-        return baseUrl().toString() + QLatin1Char('/') + filePath;
+        QT_WARNING_PUSH
+        QT_WARNING_DISABLE_DEPRECATED
+        const auto base = baseUrl().toString();
+        QT_WARNING_POP
+        return base + QLatin1Char('/') + filePath;
 #endif
     }
 };

@@ -6,7 +6,7 @@
 
 #include <QObject>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class WirelessStatus : public QObject
 {

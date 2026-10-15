@@ -162,5 +162,3 @@ QList<NetworkModelItem *> NetworkItemsList::returnItems(const NetworkItemsList::
     }
     return result;
 }
-
-#include "moc_networkitemslist.cpp"

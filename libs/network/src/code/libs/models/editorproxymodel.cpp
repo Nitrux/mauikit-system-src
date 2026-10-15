@@ -96,5 +96,3 @@ bool EditorProxyModel::lessThan(const QModelIndex &left, const QModelIndex &righ
         return false;
     }
 }
-
-#include "moc_editorproxymodel.cpp"

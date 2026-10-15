@@ -9,7 +9,7 @@
 
 #include <QObject>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class Enums : public QObject
 {

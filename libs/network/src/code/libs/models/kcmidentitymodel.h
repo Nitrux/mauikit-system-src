@@ -12,7 +12,7 @@
 #include <QIdentityProxyModel>
 #include <QModelIndex>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class MAUIKITSYSTEMNETWORK_EXPORT KcmIdentityModel : public QIdentityProxyModel
 {

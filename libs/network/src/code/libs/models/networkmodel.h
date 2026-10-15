@@ -12,7 +12,7 @@
 #include <QAbstractListModel>
 #include <QQueue>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 #include "networkitemslist.h"
 

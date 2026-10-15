@@ -9,7 +9,7 @@
 #include <BluezQt/DevicesModel>
 #include <QSortFilterProxyModel>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 /** @brief Sorts Bluetooth devices and can exclude devices marked as blocked. */
 class DevicesProxyModel : public QSortFilterProxyModel

@@ -163,5 +163,3 @@ bool Configuration::systemConnectionsByDefault() const
 {
     return readGeneralEntryWithFallback(QStringLiteral("SystemConnectionsByDefault"), false);
 }
-
-#include "moc_configuration.cpp"

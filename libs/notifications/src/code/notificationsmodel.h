@@ -11,7 +11,7 @@
 #include <QTimer>
 
 #include "notificationserver.h"
-class HistoryModel;
+#include "historymodel.h"
 class Notification;
 
 /**
@@ -58,6 +58,7 @@ public:
     Q_INVOKABLE void invokeDefaultAction(uint id);
 
     int rowOfNotification(uint id) const;
+    using QAbstractItemModel::removeRows;
     void removeRows(const QVector<int> &rows);
 
     HistoryModel* historyModel() const;

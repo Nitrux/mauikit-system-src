@@ -11,7 +11,7 @@
 #include <QHash>
 #include <QVariantMap>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class LaunchApp : public QObject
 {

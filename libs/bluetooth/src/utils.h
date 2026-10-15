@@ -10,7 +10,7 @@
 #include <BluezQt/DevicesModel>
 #include <QSortFilterProxyModel>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class Utils : public QObject
 {

@@ -15,7 +15,7 @@
 
 #include <QCoroCore>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 class ConnectionIcon : public QObject
 {

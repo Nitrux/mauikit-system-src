@@ -115,5 +115,3 @@ void AvailableDevices::deviceRemoved()
         Q_EMIT bluetoothDeviceAvailableChanged(false);
     }
 }
-
-#include "moc_availabledevices.cpp"

@@ -128,8 +128,14 @@ void SortFilterModel::setFilterCallback(const QJSValue &callback)
         return;
     }
 
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    beginFilterChange();
+    m_filterCallback = callback;
+    endFilterChange();
+    #else
     m_filterCallback = callback;
     invalidateFilter();
+    #endif
 
     Q_EMIT filterCallbackChanged(callback);
 }

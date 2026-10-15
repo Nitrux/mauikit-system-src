@@ -77,5 +77,3 @@ void EnabledConnections::onWwanHwEnabled(bool enabled)
     m_wwanHwEnabled = enabled;
     Q_EMIT wwanHwEnabled(enabled);
 }
-
-#include "moc_enabledconnections.cpp"

@@ -17,7 +17,7 @@
 #include <functional>
 #include <memory>
 
-#include <qqmlregistration.h>
+#include <QtQmlIntegration/qqmlintegration.h>
 
 #include <ModemManagerQt/GenericTypes>
 #include <NetworkManagerQt/Connection>

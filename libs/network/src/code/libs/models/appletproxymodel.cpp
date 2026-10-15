@@ -119,5 +119,3 @@ bool AppletProxyModel::lessThan(const QModelIndex &left, const QModelIndex &righ
         return false;
     }
 }
-
-#include "moc_appletproxymodel.cpp"
