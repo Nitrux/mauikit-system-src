@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.16)
 project(MauiKitSystemControl LANGUAGES CXX VERSION ${MAUIKITSYSTEM_VERSION})
 
 find_package(Qt6 ${REQUIRED_QT_VERSION} COMPONENTS Core DBus REQUIRED)
-find_package(KF6 ${REQUIRED_KF_VERSION} REQUIRED COMPONENTS BluezQt)
+find_package(KF6 ${REQUIRED_KF_VERSION} REQUIRED COMPONENTS BluezQt CoreAddons)
 
 include(GenerateExportHeader)
 
@@ -37,7 +37,8 @@ add_library(MauiKitSystem::Control ALIAS ${PROJECT_NAME})
 target_sources(${PROJECT_NAME}
     PRIVATE
     src/code/bluetoothcontrolbackend.cpp
-    src/code/mauikit_system_control.cpp)
+    src/code/mauikit_system_control.cpp
+    src/code/moduleinfo.cpp)
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC
@@ -46,6 +47,8 @@ target_include_directories(${PROJECT_NAME}
     "$<INSTALL_INTERFACE:${KDE_INSTALL_INCLUDEDIR}/Maui/Core/System>")
 
 target_link_libraries(${PROJECT_NAME}
+    PUBLIC
+    KF6::CoreAddons
     PRIVATE
     Qt6::Core
     Qt6::DBus
@@ -64,6 +67,7 @@ install(EXPORT MauiKitSystemControlTargets
     NAMESPACE MauiKitSystem::)
 install(FILES
     src/code/mauikit_system_control.h
+    src/code/moduleinfo.h
     "${CMAKE_CURRENT_BINARY_DIR}/control_export.h"
     "${CMAKE_CURRENT_BINARY_DIR}/mauikitsystemcontrol_version.h"
     DESTINATION ${KDE_INSTALL_INCLUDEDIR}/Maui/Core/System
