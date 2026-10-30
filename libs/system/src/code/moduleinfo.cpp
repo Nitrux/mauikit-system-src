@@ -12,7 +12,10 @@ QString MauiKitSystem::versionString()
 
 QString MauiKitSystem::buildVersion()
 {
-    return QStringLiteral("n/a");
+    if (QStringLiteral(GIT_COMMIT_HASH) == QStringLiteral("n/a"))
+        return QStringLiteral("n/a");
+
+    return QStringLiteral(GIT_BRANCH) + QStringLiteral("/") + QStringLiteral(GIT_COMMIT_HASH);
 }
 
 KAboutComponent MauiKitSystem::aboutData()
