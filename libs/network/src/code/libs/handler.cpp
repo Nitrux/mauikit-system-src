@@ -466,7 +466,7 @@ void Handler::addAndActivateConnectionDBus(const NMVariantMapMap &map, const QSt
         m_keychainSecretAgent->cacheConnectionSecrets(uuid, effectiveMap);
     }
 
-    storeSecretsIfNeeded(uuid, effectiveMap, [this, name, uuid, device, specificObject](bool success, const QString &errorMessage) {
+    storeSecretsIfNeeded(uuid, effectiveMap, [this, name, uuid, device, specificObject, effectiveMap](bool success, const QString &errorMessage) {
         if (!success) {
             if (m_keychainSecretAgent) {
                 m_keychainSecretAgent->clearCachedConnectionSecrets(uuid);
