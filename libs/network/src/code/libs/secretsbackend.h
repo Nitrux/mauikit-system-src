@@ -95,6 +95,8 @@ public Q_SLOTS:
                                 const QStringList &hints,
                                 uint flags) override;
     void SaveSecrets(const NMVariantMapMap &connection, const QDBusObjectPath &connectionPath) override;
+    void cacheConnectionSecrets(const QString &uuid, const NMVariantMapMap &connection);
+    void clearCachedConnectionSecrets(const QString &uuid);
 
 private:
     struct PendingGetSecrets;
@@ -106,6 +108,7 @@ private:
 
     KeychainBackend *const m_backend;
     QHash<QString, QSharedPointer<PendingGetSecrets>> m_pendingGetSecrets;
+    QHash<QString, NMVariantMapMap> m_cachedConnectionSecrets;
 };
 
 #endif // MAUIKIT_SYSTEM_NETWORK_SECRETS_BACKEND_H

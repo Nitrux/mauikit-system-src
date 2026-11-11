@@ -12,6 +12,7 @@
 
 #include <NetworkManagerQt/AccessPoint>
 #include <NetworkManagerQt/ActiveConnection>
+#include <NetworkManagerQt/Device>
 #include <NetworkManagerQt/GsmSetting>
 #include <NetworkManagerQt/Ipv4Setting>
 #include <NetworkManagerQt/Manager>
@@ -85,9 +86,7 @@ Handler::Handler(QObject *parent)
 
     m_nmOwnedSecretsBackend = std::make_unique<NmOwnedBackend>();
     m_keychainSecretsBackend = std::make_unique<KeychainBackend>(secretServiceAvailable);
-    if (m_keychainSecretsBackend->available()) {
-        m_keychainSecretAgent = std::make_unique<KeychainSecretAgent>(m_keychainSecretsBackend.get(), this);
-    }
+    m_keychainSecretAgent = std::make_unique<KeychainSecretAgent>(m_keychainSecretsBackend.get(), this);
 
     if (!Configuration::self().hotspotConnectionPath().isEmpty()) {
         NetworkManager::ActiveConnection::Ptr hotspot = NetworkManager::findActiveConnection(Configuration::self().hotspotConnectionPath());
@@ -461,9 +460,17 @@ void Handler::addAndActivateConnectionDBus(const NMVariantMapMap &map, const QSt
     const QString name = map.value(QStringLiteral("connection")).value(QStringLiteral("id")).toString();
     const QString uuid = map.value(QStringLiteral("connection")).value(QStringLiteral("uuid")).toString();
     const NMVariantMapMap effectiveMap = applySecretsStorageMode(uuid, map);
+    const QVariantMap securityMap = effectiveMap.value(QStringLiteral("802-11-wireless-security"));
+    if (m_keychainSecretAgent
+        && (securityMap.contains(QStringLiteral("psk")) || securityMap.contains(QStringLiteral("wep-key0")))) {
+        m_keychainSecretAgent->cacheConnectionSecrets(uuid, effectiveMap);
+    }
 
-    storeSecretsIfNeeded(uuid, effectiveMap, [this, name, uuid, device, specificObject, effectiveMap](bool success, const QString &errorMessage) {
+    storeSecretsIfNeeded(uuid, effectiveMap, [this, name, uuid, device, specificObject](bool success, const QString &errorMessage) {
         if (!success) {
+            if (m_keychainSecretAgent) {
+                m_keychainSecretAgent->clearCachedConnectionSecrets(uuid);
+            }
             KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
             notification->setTitle(i18n("Failed to add %1", name));
             notification->setComponentName(QStringLiteral("networkmanagement"));
@@ -473,25 +480,101 @@ void Handler::addAndActivateConnectionDBus(const NMVariantMapMap &map, const QSt
             return;
         }
 
-        auto *watcher = new QDBusPendingCallWatcher(NetworkManager::addAndActivateConnection(effectiveMap, device, specificObject), this);
-        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, name, uuid] {
-            const QDBusPendingReply<QDBusObjectPath> reply = *watcher;
-            if (!reply.isValid()) {
+        auto *addWatcher = new QDBusPendingCallWatcher(NetworkManager::addConnection(effectiveMap), this);
+        connect(addWatcher, &QDBusPendingCallWatcher::finished, this, [this, addWatcher, name, uuid, device, specificObject] {
+            const QDBusPendingReply<QDBusObjectPath> addReply = *addWatcher;
+            addWatcher->deleteLater();
+            if (!addReply.isValid()) {
+                if (m_keychainSecretAgent) {
+                    m_keychainSecretAgent->clearCachedConnectionSecrets(uuid);
+                }
                 if (storageModeForConnection(uuid) == KeychainStorage && m_keychainSecretsBackend) {
                     m_keychainSecretsBackend->removeConnectionSecrets(uuid);
                 }
                 KNotification *notification = new KNotification(QStringLiteral("FailedToAddConnection"), KNotification::CloseOnTimeout, this);
                 notification->setTitle(i18n("Failed to add %1", name));
                 notification->setComponentName(QStringLiteral("networkmanagement"));
-                notification->setText(reply.error().message());
+                notification->setText(addReply.error().message());
                 notification->setIconName(QStringLiteral("dialog-warning"));
                 notification->sendEvent();
+                return;
             }
-            watcher->deleteLater();
+
+            const QString connectionPath = addReply.value().path();
+            const auto connection = NetworkManager::findConnection(connectionPath);
+            const auto activateCreatedProfile = [this, name, uuid, device, specificObject, connectionPath] {
+                auto *activationWatcher =
+                    new QDBusPendingCallWatcher(NetworkManager::activateConnection(connectionPath, device, specificObject), this);
+                connect(activationWatcher, &QDBusPendingCallWatcher::finished, this, [this, activationWatcher, name, uuid, device] {
+                    const QDBusPendingReply<QDBusObjectPath> activationReply = *activationWatcher;
+                    activationWatcher->deleteLater();
+                    if (!activationReply.isValid()) {
+                        if (m_keychainSecretAgent) {
+                            m_keychainSecretAgent->clearCachedConnectionSecrets(uuid);
+                        }
+                        KNotification *notification =
+                            new KNotification(QStringLiteral("FailedToActivateConnection"), KNotification::CloseOnTimeout, this);
+                        notification->setTitle(i18n("Failed to activate %1", name));
+                        notification->setComponentName(QStringLiteral("networkmanagement"));
+                        notification->setText(activationReply.error().message());
+                        notification->setIconName(QStringLiteral("dialog-warning"));
+                        notification->sendEvent();
+                        return;
+                    }
+
+                    const auto activeConnection = NetworkManager::findActiveConnection(activationReply.value().path());
+                    const auto networkDevice = NetworkManager::findNetworkInterface(device);
+                    if (!networkDevice) {
+                        return;
+                    }
+
+                    const auto deviceStateConnection = std::make_shared<QMetaObject::Connection>();
+                    *deviceStateConnection = connect(networkDevice.data(),
+                                                     &NetworkManager::Device::stateChanged,
+                                                     this,
+                                                     [this, uuid, deviceStateConnection](NetworkManager::Device::State state,
+                                                                                  NetworkManager::Device::State,
+                                                                                  NetworkManager::Device::StateChangeReason) {
+                                                         if (state == NetworkManager::Device::Failed
+                                                             || state == NetworkManager::Device::Activated) {
+                                                             if (state == NetworkManager::Device::Failed && m_keychainSecretAgent) {
+                                                                 m_keychainSecretAgent->clearCachedConnectionSecrets(uuid);
+                                                             }
+                                                             QObject::disconnect(*deviceStateConnection);
+                                                         }
+                                                     });
+                    if (activeConnection) {
+                        const auto activeStateConnection = std::make_shared<QMetaObject::Connection>();
+                        *activeStateConnection = connect(activeConnection.data(),
+                                                         &NetworkManager::ActiveConnection::stateChangedReason,
+                                                         this,
+                                                         [this, uuid, activeStateConnection](NetworkManager::ActiveConnection::State state,
+                                                                                     NetworkManager::ActiveConnection::Reason) {
+                                                             if (state == NetworkManager::ActiveConnection::Activated
+                                                                 || state == NetworkManager::ActiveConnection::Deactivated) {
+                                                                 if (state == NetworkManager::ActiveConnection::Deactivated && m_keychainSecretAgent) {
+                                                                     m_keychainSecretAgent->clearCachedConnectionSecrets(uuid);
+                                                                 }
+                                                                 QObject::disconnect(*activeStateConnection);
+                                                             }
+                                                         });
+                    }
+                });
+            };
+
+            if (connection) {
+                auto *secretsWatcher =
+                    new QDBusPendingCallWatcher(connection->secrets(QStringLiteral("802-11-wireless-security")), this);
+                connect(secretsWatcher, &QDBusPendingCallWatcher::finished, this, [secretsWatcher, activateCreatedProfile] {
+                    secretsWatcher->deleteLater();
+                    activateCreatedProfile();
+                });
+            } else {
+                activateCreatedProfile();
+            }
         });
     });
 }
-
 void Handler::deactivateConnection(const QString &connection, const QString &device)
 {
     deactivateConnectionInternal(connection, device);

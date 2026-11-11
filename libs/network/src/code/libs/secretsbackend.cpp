@@ -41,10 +41,7 @@ SecretFlagList knownSecretFlagKeys()
     return {
         {QStringLiteral("802-11-wireless-security"), QStringList{
                                                        QStringLiteral("psk-flags"),
-                                                       QStringLiteral("wep-key0-flags"),
-                                                       QStringLiteral("wep-key1-flags"),
-                                                       QStringLiteral("wep-key2-flags"),
-                                                       QStringLiteral("wep-key3-flags"),
+                                                       QStringLiteral("wep-key-flags"),
                                                        QStringLiteral("leap-password-flags"),
                                                    }},
         {QStringLiteral("802-1x"), QStringList{
@@ -210,6 +207,8 @@ void KeychainBackend::get(const QString &uuid, const QString &setting, const QSt
 
 void KeychainBackend::set(const QString &uuid, const QString &setting, const QString &key, const QString &value, WriteCallback callback)
 {
+    Q_UNUSED(value)
+
     const QString secretKey = keyForSecret(uuid, setting, key);
     if (secretKey.isEmpty()) {
         if (callback) {
@@ -291,11 +290,26 @@ QStringList secretKeysForSetting(const QString &setting)
     QStringList keys;
     const QStringList flagKeys = knownSecretFlagKeys().value(setting);
     for (const QString &flagKey : flagKeys) {
-        if (flagKey.endsWith(QStringLiteral("-flags"))) {
+        if (setting == QStringLiteral("802-11-wireless-security") && flagKey == QStringLiteral("wep-key-flags")) {
+            keys.append(QStringLiteral("wep-key0"));
+            keys.append(QStringLiteral("wep-key1"));
+            keys.append(QStringLiteral("wep-key2"));
+            keys.append(QStringLiteral("wep-key3"));
+        } else if (flagKey.endsWith(QStringLiteral("-flags"))) {
             keys.append(flagKey.left(flagKey.size() - 6));
         }
     }
     return keys;
+}
+
+QString secretFlagKeyForSecret(const QString &setting, const QString &secretKey)
+{
+    if (setting == QStringLiteral("802-11-wireless-security")
+        && (secretKey == QStringLiteral("wep-key0") || secretKey == QStringLiteral("wep-key1")
+            || secretKey == QStringLiteral("wep-key2") || secretKey == QStringLiteral("wep-key3"))) {
+        return QStringLiteral("wep-key-flags");
+    }
+    return secretKey + QStringLiteral("-flags");
 }
 
 QList<SecretEntry> connectionSecretEntries(const NMVariantMapMap &connection)
@@ -443,6 +457,18 @@ KeychainSecretAgent::KeychainSecretAgent(KeychainBackend *backend, QObject *pare
 {
 }
 
+void KeychainSecretAgent::cacheConnectionSecrets(const QString &uuid, const NMVariantMapMap &connection)
+{
+    if (!uuid.isEmpty()) {
+        m_cachedConnectionSecrets.insert(uuid, connection);
+    }
+}
+
+void KeychainSecretAgent::clearCachedConnectionSecrets(const QString &uuid)
+{
+    m_cachedConnectionSecrets.remove(uuid);
+}
+
 QString KeychainSecretAgent::requestId(const QDBusObjectPath &connectionPath, const QString &settingName)
 {
     return connectionPath.path() + QLatin1Char(0x0a) + settingName;
@@ -472,10 +498,31 @@ NMVariantMapMap KeychainSecretAgent::GetSecrets(const NMVariantMapMap &connectio
     const QDBusMessage callMessage = message();
     const QString uuid = connectionUuid(connection, connectionPath);
     const QStringList keys = secretKeysForSetting(settingName);
-    if (!m_backend || uuid.isEmpty() || keys.isEmpty()) {
+    if (uuid.isEmpty() || keys.isEmpty()) {
         sendError(uuid.isEmpty() ? InvalidConnection : NoSecrets,
                   uuid.isEmpty() ? QStringLiteral("The connection has no UUID.") : QStringLiteral("No stored secrets are available."),
                   callMessage);
+        return {};
+    }
+
+    const QVariantMap cachedSetting = m_cachedConnectionSecrets.value(uuid).value(settingName);
+    QVariantMap cachedSecrets;
+    for (const QString &key : keys) {
+        const QVariant value = cachedSetting.value(key);
+        if (!value.toString().isEmpty()) {
+            cachedSecrets.insert(key, value);
+        }
+    }
+    if (!cachedSecrets.isEmpty()) {
+        cachedSecrets.insert(QStringLiteral("name"), settingName);
+        NMVariantMapMap result;
+        result.insert(settingName, cachedSecrets);
+        sendReply(callMessage.createReply({QVariant::fromValue(result)}));
+        return {};
+    }
+
+    if (!m_backend || !m_backend->available()) {
+        sendError(NoSecrets, QStringLiteral("No stored or pending secrets are available."), callMessage);
         return {};
     }
 
@@ -564,16 +611,66 @@ void KeychainSecretAgent::SaveSecrets(const NMVariantMapMap &connection, const Q
     setDelayedReply(true);
     const QDBusMessage callMessage = message();
     const QString uuid = connectionUuid(connection, connectionPath);
-    if (!m_backend || uuid.isEmpty()) {
+    if (uuid.isEmpty()) {
         sendError(InvalidConnection, QStringLiteral("The connection has no UUID."), callMessage);
         return;
     }
 
-    m_backend->storeConnectionSecrets(uuid, connection, [this, callMessage](bool success, const QString &errorMessage) {
+    if (!m_backend || !m_backend->available()) {
+        const auto profile = NetworkManager::findConnection(connectionPath.path());
+        const auto profileSettings = profile ? profile->settings() : NetworkManager::ConnectionSettings::Ptr();
+        if (!profile || !profileSettings || !m_cachedConnectionSecrets.contains(uuid)) {
+            sendError(InvalidConnection, QStringLiteral("The connection profile is not available for secret storage."), callMessage);
+            return;
+        }
+
+        NMVariantMapMap updatedSettings = profileSettings->toMap();
+        for (auto settingIt = connection.cbegin(); settingIt != connection.cend(); ++settingIt) {
+            const QString settingName = settingIt.key();
+            const QStringList keys = secretKeysForSetting(settingName);
+            if (keys.isEmpty()) {
+                continue;
+            }
+
+            QVariantMap target = updatedSettings.value(settingName);
+            const QVariantMap supplied = settingIt.value();
+            const QVariantMap cached = m_cachedConnectionSecrets.value(uuid).value(settingName);
+            for (const QString &key : keys) {
+                QVariant value = supplied.value(key);
+                if (value.toString().isEmpty()) {
+                    value = cached.value(key);
+                }
+                if (!value.toString().isEmpty()) {
+                    target.insert(key, value);
+                    target.insert(secretFlagKeyForSecret(settingName, key),
+                                  QVariant::fromValue(static_cast<quint32>(NetworkManager::Setting::None)));
+                }
+            }
+            if (!target.isEmpty()) {
+                updatedSettings.insert(settingName, target);
+            }
+        }
+
+        auto *watcher = new QDBusPendingCallWatcher(profile->update(updatedSettings), this);
+        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, callMessage, uuid] {
+            const QDBusPendingReply<> reply = *watcher;
+            watcher->deleteLater();
+            if (!reply.isValid()) {
+                sendError(InternalError, reply.error().message(), callMessage);
+                return;
+            }
+            clearCachedConnectionSecrets(uuid);
+            sendReply(callMessage.createReply());
+        });
+        return;
+    }
+
+    m_backend->storeConnectionSecrets(uuid, connection, [this, callMessage, uuid](bool success, const QString &errorMessage) {
         if (!success) {
             sendError(InternalError, errorMessage, callMessage);
             return;
         }
+        clearCachedConnectionSecrets(uuid);
         sendReply(callMessage.createReply());
     });
 }
@@ -583,16 +680,23 @@ void KeychainSecretAgent::DeleteSecrets(const NMVariantMapMap &connection, const
     setDelayedReply(true);
     const QDBusMessage callMessage = message();
     const QString uuid = connectionUuid(connection, connectionPath);
-    if (!m_backend || uuid.isEmpty()) {
+    if (uuid.isEmpty()) {
         sendError(InvalidConnection, QStringLiteral("The connection has no UUID."), callMessage);
         return;
     }
 
-    m_backend->removeConnectionSecrets(uuid, [this, callMessage](bool success, const QString &errorMessage) {
+    if (!m_backend || !m_backend->available()) {
+        clearCachedConnectionSecrets(uuid);
+        sendReply(callMessage.createReply());
+        return;
+    }
+
+    m_backend->removeConnectionSecrets(uuid, [this, callMessage, uuid](bool success, const QString &errorMessage) {
         if (!success) {
             sendError(InternalError, errorMessage, callMessage);
             return;
         }
+        clearCachedConnectionSecrets(uuid);
         sendReply(callMessage.createReply());
     });
 }
